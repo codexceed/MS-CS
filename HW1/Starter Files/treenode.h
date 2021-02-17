@@ -176,6 +176,12 @@ public:
    to you.
 */
 
+class empty: public treenode
+{
+  public:
+
+  virtual string value() const { return ""; }
+};
 
 class prog : public treenode
 {
@@ -205,9 +211,8 @@ class statements: public treenode
 {
   public:
   
-   statements(statement* s, terminal* t1) : treenode(s, t1) {}
-   statements(statement* s1, statements* s2) : treenode(s1,s2) {}
-   statements(statement* s3, terminal* t2, statements* s4) : treenode(s3, t2, s4) {}
+   statements(treenode* s1, treenode* s2) : treenode(s1, s2) {}
+   statements(treenode* s3, treenode* s4, treenode* s5) : treenode(s3, s4, s5) {}
 };
 
 
