@@ -188,9 +188,9 @@ class prog : public treenode
 class statement : public treenode
 {
   public:
- 
-  statement(treenode* t1, treenode* t2, treenode* e, treenode* r) : 
-        treenode(t1,t2,e,r) {}
+  
+  statement(treenode* t1, treenode* t2) : treenode(t1, t2) {}
+  statement(treenode* t3, treenode* t4, treenode* t5) : treenode(t3, t4, t5) {}
 
   
      virtual void print(ostream& o) const 
@@ -205,8 +205,9 @@ class statements: public treenode
 {
   public:
   
-   statements(treenode* s) : treenode(s) {}
-   statements(treenode* s1, treenode* s2) : treenode(s1,s2) {}
+   statements(statement* s, terminal* t1) : treenode(s, t1) {}
+   statements(statement* s1, statements* s2) : treenode(s1,s2) {}
+   statements(statement* s3, terminal* t2, statements* s4) : treenode(s3, t2, s4) {}
 };
 
 

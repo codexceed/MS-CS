@@ -4,7 +4,7 @@
 #include <vector>
 
 /* needs to come before trans.tab.h  */
-#include "treenode.h"
+#include "treenode.starter.h"
 using namespace asttree;
 
 #include "trans.tab.h"  /* We want the tokens defined in trans.y. */
@@ -58,7 +58,7 @@ int flag=0;
 
 
   /* RegEx for terminals and non-terminals goes here */
-????????   {  yylval.val = new terminal(yytext); 
+"[A-z][\w-]*"   {  yylval.val = new terminal(yytext); 
                      if (section != 2) 
                        cout << yytext; 
                      flag=0; /* if we saw a terminal or non-terminal, the line cannot be empty */
@@ -93,7 +93,7 @@ int flag=0;
 ";"			{ yylval.val = new terminal("\n   ;"); if (section==2) return SEMI; }
 
   /* Anything in the definitions section that begins with %  */
-??????		{ /* always discard directives */   cout << yytext; }
+"%.*"		{ /* always discard directives */   cout << yytext; }
 
 
  /* Section divider */
@@ -106,16 +106,38 @@ int flag=0;
 
  /* Code block. %{ ...  %} 
     Warning: possibly multiple lines!  */
-???????			{ /* discard flex code block */ cout << yytext; }
+"%{"			{ /* discard flex code block */ cout << yytext; 
+              int c;
+              while ((c = yyinput()) != 0)
+              {
+                if (c == '\n')
+                  ++yylineno; /* increment the line number */
+                else if (c == '%')
+                {
+                  if ((c = yyinput()) == '}')
+                    break;
+                  unput(c); /* we did not see the /.  Oh well, put it back. */
+                }
+              }
+          }
 
 
  /* This is the %union directive. Also can span multiple lines. */
 "%union {"[^}]*"};"	{ /* discard union code block */ cout << yytext; }
 
  /* Code action block of the form { .... } */
-??????			{ /* discard action code block */ if (section != 2) cout << yytext; }
+"{"			{ /* discard action code block */ if (section != 2) cout << yytext;
+          int c;
+              while ((c = yyinput()) != 0)
+              {
+                if (c == '\n')
+                  ++yylineno; /* increment the line number */
+                else if (c == '}')
+                break;
+              }
+        }
 
-[\n\r]+                   {  if (section!=2) 
+"[\n\r]+"                   {  if (section!=2) 
                                cout << yytext;
                             
                             if (flag)
@@ -125,7 +147,7 @@ int flag=0;
                             }
                         }
 
-[ \t]+              { /* Ignore white characters. */ cout << yytext; }
+"[ \t]+"              { /* Ignore white characters. */ cout << yytext; }
 
 .                       { 
                          if (section != 2)

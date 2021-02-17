@@ -24,7 +24,7 @@ using namespace asttree;
 %token <val> RULE_OR
 %token <val> REP_ONE REP_ZERO
 
-%type <val> prog statements statement expr quant rest 
+%type <val> prog statements statement 
 
 %%
 
@@ -34,18 +34,15 @@ prog : SECTION statements SECTION   {  $$ = new prog($1,$2,$3);  /* This adds a 
                                     } 
     ;
 
-statements :  statement             {
-                                       $$ = new statements($1);  /* This adds a node to our own parse tree */
-                                       BNFConverter::statementNode = $$; 
-                                    }
-
-    |    statement statements       {  $$ = new statements($1, $2);  /* This adds a node to our own parse tree */ }
+statements :  statement SEMI                {  $$ = new statements($1, $2);  /* This adds a node to our own parse tree */
+                                            BNFConverter::statementNode = $$; 
+                                            }
+    |         statement RULE_OR statements  {  $$ = new statements($1, $2, $3);  /* This adds a node to our own parse tree */ }
     ;
 
-statement : /* Fill in the rest of the rule */   {   $$ = new statement($1,$2,$3,...); /* This adds a node to our own parse tree */ }
-    ;
-
-expr :  /* Fill in the rest of the rule  */
+statement :  TERM_OR_NONTERM statement           {  $$ = new statement($1, $2); /* This adds a node to our own parse tree */ }
+    |        TERM_OR_NONTERM GROUP_OR statement  {  $$ = new statement($1, $2, $3) }
+    |        ENDL                                {  $$ = new terminal("") }
     ;
 
 
