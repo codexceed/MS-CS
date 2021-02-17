@@ -1,4 +1,6 @@
 # Programming Languages Homework 1 Problem 5 Solution | (E)BNF Parser
+**Submitted By**: Sarthak Joshi
+**ID**: N15526247
 ## What this package does?
 The compiled output of the **HW1/Translator/trans.l** and **HW1/Translator/trans.y** files using **Flex** and **Bison** respectively will generate a parser capable to ingesting and validate the BNF grammar on the input bison file and output the validated grammar.
 
