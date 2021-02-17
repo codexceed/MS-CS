@@ -4,7 +4,7 @@ set -e  # Exit on error
 
 
 bison -d trans.y
-flex trans.l
+flex --debug trans.l
 g++ lex.yy.c trans.tab.c treenode.cpp
 
 
