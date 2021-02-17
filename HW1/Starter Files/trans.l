@@ -51,46 +51,49 @@ int flag=0;
   }
 }
 
-"<"	{  yylval.val = new terminal(yytext); if (section==2) return REP_ZERO_LEFT; else cout << yytext; }
+"<"	{  yylval.val = new terminal(yytext); cout << yytext; if (section==2) return REP_ZERO_LEFT; }
 
-">" { yylval.val = new terminal(yytext); if (section==2) return REP_ZERO_RIGHT; else cout << yytext; }
+">" { yylval.val = new terminal(yytext); cout << yytext; if (section==2) return REP_ZERO_RIGHT; }
 
 
   /* RegEx for terminals and non-terminals goes here */
-"[a-zA-Z0-9]+"   {  yylval.val = new terminal(yytext); 
-                     if (section != 2) 
-                       cout << yytext; 
-                     flag=0; /* if we saw a terminal or non-terminal, the line cannot be empty */
-                      if (section == 2)
-                        return TERM_OR_NONTERM;
-                  }
 
-"["			{ yylval.val = new terminal(yytext);  if (section==2) return OPTION_LEFT; else cout << yytext; }
+"["			{ yylval.val = new terminal(yytext); cout << yytext; if (section==2) return OPTION_LEFT; }
 
-"]"			{ yylval.val = new terminal(yytext); if (section==2) return OPTION_RIGHT; else cout << yytext;}
+"]"			{ yylval.val = new terminal(yytext); cout << yytext; if (section==2) return OPTION_RIGHT; }
 
-"("			{ yylval.val = new terminal(yytext); if (section==2) return GROUPING_LEFT; else cout << yytext; }
+"("			{ yylval.val = new terminal(yytext); cout << yytext; if (section==2) return GROUPING_LEFT; }
 
-")"			{ yylval.val = new terminal(yytext); if (section==2) return GROUPING_RIGHT; else cout << yytext; }
+")"			{ yylval.val = new terminal(yytext); cout << yytext; if (section==2) return GROUPING_RIGHT; }
 
-"+"			{ yylval.val = new terminal(yytext); if (section==2) return REP_ONE; else cout << yytext; }
+\+			{ yylval.val = new terminal(yytext); cout << yytext; if (section==2) return REP_ONE; }
 
-"*"			{ yylval.val = new terminal(yytext); if (section==2) return REP_ZERO; else cout << yytext; }
+\*			{ yylval.val = new terminal(yytext); cout << yytext; if (section==2) return REP_ZERO; }
 
-"||"			{ yylval.val = new terminal("|"); if (section==2) return GROUP_OR; else cout << yytext; }
+\|\|		{ yylval.val = new terminal("|"); cout << yytext; if (section==2) return GROUP_OR; }
 
-"|"			{ yylval.val = new terminal("\n  |"); if (section==2) return RULE_OR; else cout << yytext; }
+\|			{ yylval.val = new terminal("\n  |"); cout << yytext; if (section==2) return RULE_OR; }
 
 ":"			{ 
+                            cout << yytext;
                             if (section==2) 
                            { flag=1; /* line empty if newline afer this */ 
                              yylval.val = new terminal(yytext); 
                              return REWRITES; 
                            }
-                           else cout << yytext;
                         }
 
-";"			{ yylval.val = new terminal("\n   ;"); if (section==2) return SEMI; else cout << yytext; }
+";"			{ yylval.val = new terminal("\n   ;"); cout<< "polo"; cout << yytext; if (section==2) return SEMI; }
+
+[a-zA-Z0-9]+   {  yylval.val = new terminal(yytext); 
+                       cout << yytext; 
+                     flag=0; /* if we saw a terminal or non-terminal, the line cannot be empty */
+                      if (section == 2){
+                          cout<< "yolo";
+                          return TERM_OR_NONTERM;
+                      }
+                        
+                  }
 
   /* Anything in the definitions section that begins with %  */
 "%.*"		{ /* always discard directives */   cout << yytext; }
@@ -108,9 +111,8 @@ int flag=0;
  /* Code block. %{ ...  %} 
     Warning: possibly multiple lines!  */
 "%{"			{ /* discard flex code block */ 
-              if(section!=2)  
                 cout << yytext;
-              else{
+              if(section==2){
                   int c;
               while ((c = yyinput()) != 0)
               {
@@ -131,9 +133,9 @@ int flag=0;
 
  /* Code action block of the form { .... } */
 "{"			{ /* discard action code block */ 
-          if (section != 2) cout << yytext;
+          cout << yytext;
 
-          else{
+          if(section==2){
               int c;
               while ((c = yyinput()) != 0)
               {
@@ -144,11 +146,10 @@ int flag=0;
           
         }
 
-"[\n\r]+"   {  if (section!=2) {
-                    cout << yytext;
-                }
-                  
-              else{
+"[\n\r]+"   {  
+                yylineno++;
+                cout << yytext;
+                if (section==2){
                 if (flag)
                 { flag=0;
                   yylval.val = new empty(); 
@@ -161,10 +162,9 @@ int flag=0;
 "[ \t]+"              { /* Ignore white characters. */ cout << yytext; }
 
 .                       { 
-                         if (section != 2)
-                           cout << yytext; 
+                          cout << yytext; 
                        
-                          else
+                          if (section == 2)
                           { cerr << "Invalid token: " << yytext <<  " on line " << yylineno << endl;
                            exit(1); 
                           }
