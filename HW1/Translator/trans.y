@@ -32,9 +32,9 @@ using namespace asttree;
 
 prog : SECTION statements SECTION   {  $$ = new prog($1,$2,$3);  /* This adds a node to our own parse tree */
                                     //    $$->doConversion();
-                                        cout << "=================This is the final output==================";
+                                        cout << "=================This is the BNF Grammar output=================";
                                        $$->print(cout);
-                                       cout << "===================End of output========================";
+                                        cout << "==========================End of output=========================";
                                     } 
     ;
 
