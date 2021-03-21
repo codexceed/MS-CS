@@ -7,7 +7,7 @@
 #include "treenode.h"
 using namespace asttree;
 
-#include "trans.tab.h"  /* We want the tokens defined in trans.y. */
+#include "N15526247.trans.tab.h"  /* We want the tokens defined in trans.y. */
 
 using namespace std;
 

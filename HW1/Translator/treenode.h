@@ -195,6 +195,7 @@ class statement : public treenode
 {
   public:
   
+  statement(treenode* t0) : treenode(t0) {}
   statement(treenode* t1, treenode* t2) : treenode(t1, t2) {}
   statement(treenode* t3, treenode* t4, treenode* t5) : treenode(t3, t4, t5) {}
 
@@ -202,7 +203,7 @@ class statement : public treenode
      virtual void print(ostream& o) const 
      { 
         treenode::print(o); 
-        o << endl << endl;
+        o << endl;
      }
  
 };
@@ -213,6 +214,8 @@ class statements: public treenode
   
    statements(treenode* s1, treenode* s2) : treenode(s1, s2) {}
    statements(treenode* s3, treenode* s4, treenode* s5) : treenode(s3, s4, s5) {}
+  
+  
 };
 
 
