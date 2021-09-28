@@ -1,1 +1,4 @@
 .ds_store
+.idea
+*venv/
+__pycache__

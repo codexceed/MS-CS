@@ -1,0 +1,8 @@
+followers($prerna,F).
+tweets($zeus,T).
+feed($candace,M). % Outputs public tweet by zeus retweeted by carl
+feed($phineas,M). % Outputs protected tweet by logan retweeted by carl
+feed($candace,M). % Does not show protected tweet by logan retweeted by carl
+search(whiskers,U,M). % Outputs tweet by zeus
+isviral($zeus,I,$mikasa).
+isviral($zeus,I,$mikasa,M).
