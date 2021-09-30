@@ -20,11 +20,12 @@ def imshow(img):
 
 
 # options
-dataset = 'mnist' # options: 'mnist' | 'cifar10'
+dataset = 'cifar10' # options: 'mnist' | 'cifar10'
 batch_size = 64   # input batch size for training
-epochs = 10       # number of epochs to train
-lr = 0.01        # learning rate
-limit = True
+epochs = 20       # number of epochs to train
+lr = 0.02        # learning rate
+limit = False
+device = "cuda"
 
 # Data Loading
 # Warning: this cell might take some time when you run it for the first time,
@@ -45,6 +46,10 @@ elif dataset == 'cifar10':
     trainset = datasets.CIFAR10(root='.', train=True, download=True, transform=data_transform)
     testset = datasets.CIFAR10(root='.', train=False, download=True, transform=data_transform)
 
+# Here's where we limit the dataset.
+# if limit:
+#     trainset.data = trainset.data[:50]
+
 train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
 test_loader  = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=0)
 
@@ -60,38 +65,72 @@ if dataset == 'mnist':
 elif dataset == 'cifar10':
     num_inputs = 3072
 
-num_outputs = 10 # same for both CIFAR10 and MNIST, both have 10 classes as outputs
+num_outputs = 10  # same for both CIFAR10 and MNIST, both have 10 classes as outputs
+
+
+# MNIST
+# class Net(nn.Module):
+#     def __init__(self, num_inputs, num_outputs):
+#         super(Net, self).__init__()
+#         self.linear1 = nn.Linear(num_inputs, 1000)
+#         self.tanh = nn.Tanh()
+#         self.linear2 = nn.Linear(1000, num_outputs)
+
+#     def forward(self, input):
+#         input = input.view(-1, num_inputs) # reshape input to batch x num_inputs
+#         output = self.linear1(input)
+#         output = self.tanh(output)
+#         output = self.linear2(output)
+#         return output
 
 class Net(nn.Module):
     def __init__(self, num_inputs, num_outputs):
         super(Net, self).__init__()
-        self.linear = nn.Linear(num_inputs, num_outputs)
+        self.conv1 = nn.Conv2d(3, 16, 5)
+        self.tanh = nn.Tanh()
+        self.pool1 = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(16, 128, 5)
+        self.flatten = nn.Flatten()
+        self.linear1 = nn.Linear(3200, 64)
+        self.linear2 = nn.Linear(64, num_outputs)
 
     def forward(self, input):
-        input = input.view(-1, num_inputs) # reshape input to batch x num_inputs
-        output = self.linear(input)
+        # input = input.view(-1, num_inputs) # reshape input to batch x num_inputs
+        output = self.conv1(input)
+        output = self.tanh(output)
+        output = self.pool1(output)
+        output = self.conv2(output)
+        output = self.tanh(output)
+        output = self.pool1(output)
+        output = self.flatten(output)
+        output = self.linear1(output)
+        output = self.tanh(output)
+        output = self.linear2(output)
         return output
 
-network = Net(num_inputs, num_outputs)
+
+network = Net(num_inputs, num_outputs).to(device)
 optimizer = optim.SGD(network.parameters(), lr=lr)
 
+
+# Define training and test functions
 def train(epoch):
     network.train()
     count = 0
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = Variable(data), Variable(target)
-        optimizer.zero_grad()
-        output = network(data)
-        loss = F.cross_entropy(output, target)
-        loss.backward()
-        optimizer.step()
-        if batch_idx % 100 == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
-
-        count += 1
-        if limit and count == 50:
+    for i in range(epoch):
+      for batch_idx, (data, target) in enumerate(train_loader):
+          data, target = Variable(data).to(device), Variable(target).to(device)
+          optimizer.zero_grad()
+          output = network(data)
+          loss = F.cross_entropy(output, target)
+          loss.backward()
+          optimizer.step()
+          if batch_idx % 100 == 0:
+              print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                  i, batch_idx * len(data), len(train_loader.dataset),
+                  100. * batch_idx / len(train_loader), loss.item()))
+          count += 1
+          if limit and count == 50:
             break
 
 def test():
@@ -99,6 +138,8 @@ def test():
     test_loss = 0
     correct = 0
     for data, target in test_loader:
+        data = data.to(device)
+        target = target.to(device)
         #data, target = Variable(data, volatile=True), Variable(target)
         output = network(data)
         test_loss += F.cross_entropy(output, target, reduction='sum').item() # sum up batch loss
@@ -111,6 +152,7 @@ def test():
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
-train(1)
 
+# Train and test here
+train(epochs)
 test()
