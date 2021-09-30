@@ -22,10 +22,10 @@ def imshow(img):
 # options
 dataset = 'cifar10' # options: 'mnist' | 'cifar10'
 batch_size = 64   # input batch size for training
-epochs = 20       # number of epochs to train
+epochs = 10       # number of epochs to train
 lr = 0.02        # learning rate
 limit = False
-device = "cuda"
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Data Loading
 # Warning: this cell might take some time when you run it for the first time,
@@ -47,8 +47,8 @@ elif dataset == 'cifar10':
     testset = datasets.CIFAR10(root='.', train=False, download=True, transform=data_transform)
 
 # Here's where we limit the dataset.
-# if limit:
-#     trainset.data = trainset.data[:50]
+if limit:
+    trainset.data = trainset.data[:50]
 
 train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=0)
 test_loader  = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=0)
@@ -67,6 +67,16 @@ elif dataset == 'cifar10':
 
 num_outputs = 10  # same for both CIFAR10 and MNIST, both have 10 classes as outputs
 
+# # MNIST Default
+# class Net(nn.Module):
+#     def __init__(self, num_inputs, num_outputs):
+#         super(Net, self).__init__()
+#         self.linear = nn.Linear(num_inputs, num_outputs)
+#
+#     def forward(self, input):
+#         input = input.view(-1, num_inputs) # reshape input to batch x num_inputs
+#         output = self.linear(input)
+#         return output
 
 # MNIST
 # class Net(nn.Module):
@@ -83,6 +93,7 @@ num_outputs = 10  # same for both CIFAR10 and MNIST, both have 10 classes as out
 #         output = self.linear2(output)
 #         return output
 
+# CIFAR10 Omtimized
 class Net(nn.Module):
     def __init__(self, num_inputs, num_outputs):
         super(Net, self).__init__()
@@ -156,3 +167,11 @@ def test():
 # Train and test here
 train(epochs)
 test()
+
+image = network.linear.weight
+
+# CIFAR10 net weight
+# image = network.linear2.weight
+
+imshow(utils.make_grid(image.cpu()))
+
