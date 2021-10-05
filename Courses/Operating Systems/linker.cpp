@@ -6,6 +6,7 @@
 #include <tuple>
 #include <map>
 #include <iomanip>
+#include <exception>
 
 using namespace std;
 
@@ -15,10 +16,25 @@ struct token{
     int line;
     int pos;
 };
-
 enum Section { Definition, Use, Program };
-
 typedef tuple <int, int, vector<string>, vector< tuple <string, int> > > arg_type;
+vector < tuple <string, int> > symbol_table;
+
+
+// Exception handler
+void __parseerror(int errcode, struct token tok) {
+    string errstr[] = {
+    "NUM_EXPECTED", // Number expect, anything >= 2^30 is not a number either
+    "SYM_EXPECTED", // Symbol Expected
+    "ADDR_EXPECTED", // Addressing Expected which is A/E/I/R
+    "SYM_TOO_LONG", // Symbol Name is too long
+    "TOO_MANY_DEF_IN_MODULE", // > 16
+    "TOO_MANY_USE_IN_MODULE", // > 16
+    "TOO_MANY_INSTR", // total num_instr exceeds memory size (512)
+    };
+    cout<<"Parse Error line "<<tok.line<<" offset "<<tok.pos<<": "<<errstr[errcode]<<"\n";
+    exit(0);
+}
 
 
 // Define functions
@@ -67,7 +83,6 @@ int modInstrE(arg_type args){
 
     // Identify symbol
     string symb = use_list[operand];
-
     
     // Search symbol table for new address corresponding to the symbol
     for(auto it = symbol_table.begin(); it != symbol_table.end(); it++){
@@ -90,6 +105,8 @@ int modInstrA(arg_type args){
     return operand;
 }
 
+
+// Parse functions
 vector< tuple <string, int> > getSymbolTable(vector< struct token > tokens){
     // Define token navigation trackers
     int curr_module = 0;
@@ -99,32 +116,38 @@ vector< tuple <string, int> > getSymbolTable(vector< struct token > tokens){
     vector< tuple <string, int> > symbol_table;
 
     // Parse the tokens
-    while ( it!=tokens.end() ){
-        // Get count of current list
-        int count = stoi((*it).value);
+    while ( it!=tokens.end() ){\
+        try{
+            // Get count of current list
+            int count = stoi((*it).value);
 
-        if (curr_section == Definition){
-            for(int i=0; i<count; i++){
-                string symb = (*++it).value;
-                int addr = curr_module + stoi((*++it).value);
-                symbol_table.push_back(make_tuple(symb, addr));
+            if (curr_section == Definition){
+                for(int i=0; i<count; i++){
+                    string symb = (*++it).value;
+                    int addr = curr_module + stoi((*++it).value);
+                    symbol_table.push_back(make_tuple(symb, addr));
+                }
+                curr_section = Use;
             }
-            curr_section = Use;
-        }
 
-        else if (curr_section == Use){
-            for(int i = 0; i < count; i++, it++);
-            curr_section = Program;
-        }
+            else if (curr_section == Use){
+                for(int i = 0; i < count; i++, it++);
+                curr_section = Program;
+            }
 
-        else if (curr_section == Program){
-            for(int i = 0; i < count; i++, it++, it++);
-            curr_section = Definition;
-            curr_module+=count;
-        }
+            else if (curr_section == Program){
+                for(int i = 0; i < count; i++, it++, it++);
+                curr_section = Definition;
+                curr_module+=count;
+            }
 
-        // Keep it moving
-        it++;
+            // Keep it moving
+            it++;
+        }
+        catch(invalid_argument &in_arg){
+            __parseerror(0, *it);
+        }
+        
     }
 
     // Print the symbol table
@@ -137,7 +160,7 @@ vector< tuple <string, int> > getSymbolTable(vector< struct token > tokens){
 
 }
 
-void getInstruction(vector< struct token > tokens, vector< tuple <string, int> > symbol_table){
+void getInstruction(vector< struct token > tokens){
     // Define token navigation trackers
     int curr_module = 0, instr_index = 0;
     Section curr_section = Definition;
@@ -161,8 +184,8 @@ void getInstruction(vector< struct token > tokens, vector< tuple <string, int> >
         }
 
         else if (curr_section == Use){
-            for(int i = 0; i < count; i++, it++){
-                use_list.push_back((*it).value);
+            for(int i = 0; i < count; i++){
+                use_list.push_back((*++it).value);
             }
             curr_section = Program;
         }
@@ -174,7 +197,7 @@ void getInstruction(vector< struct token > tokens, vector< tuple <string, int> >
                 int instr = stoi((*++it).value);
                 int opcode = instr/1000, operand = instr%1000;
 
-                // Modify instruction
+                // Modify instruction by calling the corresponding mod function
                 instr_args = make_tuple(operand, curr_module, use_list, symbol_table);
                 int modded_instr = instr_mod_map[type](instr_args);
 
@@ -208,12 +231,16 @@ void parse(string input_file_path, int pass){
     input_file.close();
 
     // Pass 1 here
-    vector < tuple <string, int> > symbol_table;
-    if (pass == 1) symbol_table = getSymbolTable(tokens);
+    if (pass == 1){
+        symbol_table.clear();
+        symbol_table = getSymbolTable(tokens);
+    } 
 
-    else if (pass == 2) getInstruction(tokens, symbol_table);
+    else if (pass == 2) getInstruction(tokens);
     
 }    
+
+
 
 int main(int argc, char const *argv[])
 {
