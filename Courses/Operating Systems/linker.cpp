@@ -19,10 +19,11 @@ struct token{
 enum Section { Definition, Use, Program };
 enum SymbAttrib { Symbol, Address, Module };
 typedef vector< tuple <string, string, int> > symb_table_type;
-typedef tuple <int, int, vector<string>> arg_type;
+typedef tuple <int, int, vector<string>, int> arg_type;
 symb_table_type symbol_table;
 map <string, bool> ulist_symbol_use;
 map <string, bool> dlist_symbol_use;
+int line_no;
 
 // Exception handler and validators
 void __parseerror(int errcode, struct token tok) {
@@ -39,25 +40,37 @@ void __parseerror(int errcode, struct token tok) {
     exit(0);
 }
 
-bool symbolExists(string symb, int module){
+bool symbolExists(string symb, int module, bool update_address = true){
     for(auto it = symbol_table.begin(); it != symbol_table.end(); it++){
         // Updated error message in case of duplicate definition
         if(symb == get<Symbol>(*it)){
-            string new_addr = get<Address>(*it) + " Error: This variable is multiple times defined; first value used";
-            (*it) = make_tuple(symb, new_addr, module);
+            if(update_address){
+                string new_addr = get<Address>(*it) + " Error: This variable is multiple times defined; first value used";
+                (*it) = make_tuple(symb, new_addr, module);
+            }
             return true;
-            break;
         }
     }
 
     return false;
 }
 
+void validateSymbolAddr(int module_index, int module_size, int module_base){
+    for(auto it = symbol_table.begin() ; it != symbol_table.end() ; it++){
+        string symb = get<Symbol>(*it);
+        int module = get<Module>(*it), adjusted_addr = stoi(get<Address>(*it)) - module_base;
+
+        if(module_size <= adjusted_addr && module_index == module){
+            cout << "Warning: Module " << module << ": " << symb << " too big " << adjusted_addr << " (max=" << module_size-1 <<") assume zero relative\n";
+            (*it) = make_tuple(symb, to_string(module_base), module);
+        }
+    }
+}
 
 // Define functions
 vector<struct token> getToken(ifstream &file){
     string line;
-    int line_no = 0;
+    line_no = 0;
     vector<struct token> tokens;
 
     while( getline( file, line ) ){
@@ -90,7 +103,14 @@ vector<struct token> getToken(ifstream &file){
 
 // Instruction operand modification
 string modInstrR(arg_type args){
-    return to_string(get<1>(args) + get<0>(args));
+    int addr = get<0>(args), base = get<1>(args), instr_count = get<3>(args);
+
+    // Check if addr is valid
+    if(addr >= instr_count){
+        return to_string(base) + " Error: Relative address exceeds module size; zero used";
+    }
+
+    return to_string(base + addr);
 }
 
 string modInstrE(arg_type args){
@@ -130,7 +150,7 @@ string modInstrA(arg_type args){
 // Parse functions
 symb_table_type getSymbolTable(vector< struct token > tokens){
     // Define token navigation trackers
-    int curr_addr = 0, curr_module = 0;
+    int module_base = 0, curr_module = 0;
     Section curr_section = Definition;
     vector<struct token>::iterator it = tokens.begin();
 
@@ -141,34 +161,55 @@ symb_table_type getSymbolTable(vector< struct token > tokens){
             // Get count of current list
             int count = stoi((*it).value);
 
-            // Check def list length
-            if(count > 16) __parseerror(4, *it);
-
             if (curr_section == Definition){
+                // Check def list length
+                if(count > 16) __parseerror(4, *it);
+
                 curr_module++;
+                
                 for(int i=0; i<count; i++){
-                    string symb = (*++it).value;
+                    string symb;
+                    try{
+                        symb = (*++it).value;
+                    }
+                    catch(exception &exp){
+                        // Adjust line and pos for missing symbol
+                        int pos = (*--it).pos + 1;
+                        if(line_no != (*it).line) pos = 1;
+                        struct token tok = {"", line_no, pos};
+
+                        __parseerror(1, tok);
+                    }
                     
                     // Check symbol length
                     if(symb.length() > 16) __parseerror(3, *it);
 
-                    string addr = to_string(curr_addr + stoi((*++it).value));
+                    string addr = to_string(module_base + stoi((*++it).value));
 
                     // Only push if the symbol is new
-                    if(!symbolExists(symb, curr_addr)) symbol_table.push_back(make_tuple(symb, addr, curr_module));
+                    if(!symbolExists(symb, stoi(addr))) symbol_table.push_back(make_tuple(symb, addr, curr_module));
                 }
                 curr_section = Use;
             }
 
             else if (curr_section == Use){
+                // Check use list length
+                if(count > 16) __parseerror(5, *it);
+
                 for(int i = 0; i < count; i++, it++);
                 curr_section = Program;
             }
 
             else if (curr_section == Program){
+                // Check use list length
+                if(count >= 511) __parseerror(6, *it);
+
+                // Check for symbol address validity
+                validateSymbolAddr(curr_module, count, module_base);
+
                 for(int i = 0; i < count; i++, it++, it++);
                 curr_section = Definition;
-                curr_addr+=count;
+                module_base+=count;
             }
 
             // Keep it moving
@@ -236,22 +277,24 @@ void getInstruction(vector< struct token > tokens){
                 int instr = stoi((*++it).value);
                 int opcode = instr/1000, operand = instr%1000;
 
-                if(opcode >= 10){
-                    cout << setw(3) << setfill('0') << instr_index << ": " << "9999 Error: Illegal opcode; treated as 9999\n";
+                if(instr >= 10000 && type == "I"){
+                    cout << setw(3) << setfill('0') << instr_index << ": " << "9999 Error: Illegal immediate value; treated as 9999\n";
                 }
 
-                else if(operand >= 10000 && type == "I"){
-                    cout << setw(3) << setfill('0') << instr_index << ": " << "9999 Error: Illegal immediate value; treated as 9999\n";
+                else if(opcode >= 10){
+                    cout << setw(3) << setfill('0') << instr_index << ": " << "9999 Error: Illegal opcode; treated as 9999\n";
                 }
 
                 else{
                     // Modify instruction by calling the corresponding mod function
-                    instr_args = make_tuple(operand, curr_module, use_list);
+                    instr_args = make_tuple(operand, curr_module, use_list, count);
                     string modded_instr = instr_mod_map[type](instr_args);
 
                     // Sanitize the value pulled from symbol table to format the actual address and error message
                     int new_operand = stoi(modded_instr);
                     int new_op_len = to_string(new_operand).length();
+
+                    // Strip the operand from the message
                     string extra_text = modded_instr.substr(modded_instr.find(to_string(new_operand)) + new_op_len, modded_instr.length()-new_op_len);
 
                     cout << setw(3) << setfill('0') << instr_index << ": " << opcode << setw(3) << setfill('0') << new_operand << extra_text << endl;
@@ -262,7 +305,7 @@ void getInstruction(vector< struct token > tokens){
             // Print use list warnings
             for(auto use_it = use_list.begin(); use_it != use_list.end(); use_it++){
                 string symb = *use_it;
-                if(!ulist_symbol_use[symb]){
+                if(!ulist_symbol_use[symb] && symbolExists(symb, 0, false)){
                     cout << "Warning: Module " + to_string(curr_module+1) + ": " + symb + " appeared in the uselist but was not actually used\n";
                 }
             }
@@ -277,13 +320,12 @@ void getInstruction(vector< struct token > tokens){
         it++;
     }
 
-    cout << endl;
 
     // Print unused symbols from deflist
     for(auto it = symbol_table.begin(); it != symbol_table.end(); it++){
         string symb = get<Symbol>(*it);
         int module = get<Module>(*it);
-        if(!dlist_symbol_use[symb]) cout << "Warning: Module " << module << ": " << symb << " was defined but never used\n";
+        if(!dlist_symbol_use[symb]) cout << "\nWarning: Module " << module << ": " << symb << " was defined but never used";
     }
 }
 
