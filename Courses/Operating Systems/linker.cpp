@@ -17,7 +17,8 @@ struct token{
     int pos;
 };
 enum Section { Definition, Use, Program };
-typedef vector< tuple <string, string> > symb_table_type;
+enum SymbAttrib { Symbol, Address, Module };
+typedef vector< tuple <string, string, int> > symb_table_type;
 typedef tuple <int, int, vector<string>> arg_type;
 symb_table_type symbol_table;
 map <string, bool> ulist_symbol_use;
@@ -38,11 +39,12 @@ void __parseerror(int errcode, struct token tok) {
     exit(0);
 }
 
-bool symbolExists(string symb){
+bool symbolExists(string symb, int module){
     for(auto it = symbol_table.begin(); it != symbol_table.end(); it++){
-        if(symb == get<0>(*it)){
-            string new_addr = get<1>(*it) + " Error: This variable is multiple times defined; first value used";
-            (*it) = make_tuple(symb, new_addr);
+        // Updated error message in case of duplicate definition
+        if(symb == get<Symbol>(*it)){
+            string new_addr = get<Address>(*it) + " Error: This variable is multiple times defined; first value used";
+            (*it) = make_tuple(symb, new_addr, module);
             return true;
             break;
         }
@@ -102,9 +104,9 @@ string modInstrE(arg_type args){
     
     // Search symbol table for new address corresponding to the symbol
     for(auto it = symbol_table.begin(); it != symbol_table.end(); it++){
-        if (symb == get<0>(*it)){
+        if (symb == get<Symbol>(*it)){
             ulist_symbol_use[symb] = true;
-            return to_string(stoi(get<1>(*it)));
+            return to_string(stoi(get<Address>(*it)));
         }
     }
 
@@ -128,7 +130,7 @@ string modInstrA(arg_type args){
 // Parse functions
 symb_table_type getSymbolTable(vector< struct token > tokens){
     // Define token navigation trackers
-    int curr_module = 0;
+    int curr_addr = 0, curr_module = 0;
     Section curr_section = Definition;
     vector<struct token>::iterator it = tokens.begin();
 
@@ -143,16 +145,17 @@ symb_table_type getSymbolTable(vector< struct token > tokens){
             if(count > 16) __parseerror(4, *it);
 
             if (curr_section == Definition){
+                curr_module++;
                 for(int i=0; i<count; i++){
                     string symb = (*++it).value;
                     
                     // Check symbol length
                     if(symb.length() > 16) __parseerror(3, *it);
 
-                    string addr = to_string(curr_module + stoi((*++it).value));
+                    string addr = to_string(curr_addr + stoi((*++it).value));
 
                     // Only push if the symbol is new
-                    if(!symbolExists(symb)) symbol_table.push_back(make_tuple(symb, addr));
+                    if(!symbolExists(symb, curr_addr)) symbol_table.push_back(make_tuple(symb, addr, curr_module));
                 }
                 curr_section = Use;
             }
@@ -165,7 +168,7 @@ symb_table_type getSymbolTable(vector< struct token > tokens){
             else if (curr_section == Program){
                 for(int i = 0; i < count; i++, it++, it++);
                 curr_section = Definition;
-                curr_module+=count;
+                curr_addr+=count;
             }
 
             // Keep it moving
@@ -180,7 +183,7 @@ symb_table_type getSymbolTable(vector< struct token > tokens){
     // Print the symbol table
     cout << "Symbol Table" << endl;
     for(auto it = symbol_table.begin(); it != symbol_table.end(); it++){
-            cout << get<0>(*it) << "=" << get<1>(*it) << endl;
+            cout << get<Symbol>(*it) << "=" << get<Address>(*it) << endl;
     }
 
     return symbol_table;
@@ -278,8 +281,9 @@ void getInstruction(vector< struct token > tokens){
 
     // Print unused symbols from deflist
     for(auto it = symbol_table.begin(); it != symbol_table.end(); it++){
-        string symb = get<0>(*it);
-        if(!dlist_symbol_use[symb]) cout << "Warning: " + symb + " was defined but never used\n";
+        string symb = get<Symbol>(*it);
+        int module = get<Module>(*it);
+        if(!dlist_symbol_use[symb]) cout << "Warning: Module " << module << ": " << symb << " was defined but never used\n";
     }
 }
 
