@@ -230,7 +230,7 @@ public:
         /*
          * Orchestrate the events.
          */
-        int curr_time = 0, cpu_runtime = 0, io_start = -1, io_end = -1, io_time = 0;
+        int curr_time = 0, cpu_runtime = 0, io_end = -1, io_time = 0;
         while (!event_queue.empty()) {
             Event curr_event = get_event();
             curr_time = curr_time > curr_event.get_time() ? curr_time : curr_event.get_time();
@@ -276,7 +276,8 @@ public:
 
                         put_event(*new_event);
                     }
-                        // Enqueue finished processes.
+
+                    // Enqueue finished processes.
                     else {
                         curr_process->finishing_time = curr_time + burst_time;
                         finished_processes.push_back(*curr_process);
@@ -290,13 +291,18 @@ public:
                 case BLOCKED: {
 
                     int burst_time = myrandom(curr_process->IO);
+                    int curr_end = curr_time + burst_time;
 
                     // Calculate last io_burst time metrics
-                    if (curr_time > io_end) {
-                        io_time += io_end - io_start;
-                        io_start = curr_time;
+                    if (curr_time >= io_end){
+                        io_time += burst_time;
                     }
-                    io_end = curr_time + burst_time;
+                    else if (curr_end > io_end){
+                        io_time += curr_end - io_end;
+                    }
+
+                    // Update IO period.
+                    io_end = curr_end > io_end ? curr_end : io_end;
 
                     curr_process->io_time += burst_time;
                     Event new_event(io_end, curr_process, BLOCKED, READY);
