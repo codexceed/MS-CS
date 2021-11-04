@@ -14,18 +14,22 @@ using namespace std;
 bool DEBUG = false, VERBOSE = false;
 char scheduler_code;
 int ofs = 0, quantum = INT_MAX, maxprio = 4;
-vector < int > rand_vals;
+vector<int> rand_vals;
 string INPUT_FILE_PATH, RAND_FILE_PATH;
-enum ProcessState { CREATED, READY, RUNNING, BLOCKED } ;
-static const char *state_string [] = {"CREATED", "READY", "RUNNG", "BLOCK"};
-enum StateTransition { TRANS_TO_READY, TRANS_TO_RUN, TRANS_TO_BLOCK, TRANS_TO_PREEMPT};
+enum ProcessState {
+    CREATED, READY, RUNNING, BLOCKED
+};
+static const char *state_string[] = {"CREATED", "READY", "RUNNG", "BLOCK"};
+enum StateTransition {
+    TRANS_TO_READY, TRANS_TO_RUN, TRANS_TO_BLOCK, TRANS_TO_PREEMPT
+};
 
 
-void initRandNums(){
+void initRandNums() {
     ifstream rand_file(RAND_FILE_PATH);
     int num, n;
     rand_file >> n;
-    for(int i=0; i<n; i++){
+    for (int i = 0; i < n; i++) {
         rand_file >> num;
         rand_vals.push_back(num);
     }
@@ -42,6 +46,7 @@ class Process {
 public:
     int AT, TC, CB, IO, PID, static_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
     ProcessState state = CREATED;
+
     Process(int AT, int TC, int CB, int IO, int PID)
             :
             AT(AT),
@@ -50,150 +55,169 @@ public:
             IO(IO),
             PID(PID),
             static_priority(myrandom(maxprio)),
-            remaining_time(TC){}
+            remaining_time(TC),
+            ready_stamp(AT) {}
 
 };
 
 
 class Scheduler {
 public:
-    list <Process*> runqueue;
-    virtual void add_process(Process* process) {}
+    list<Process *> runqueue;
 
-    Process* get_next_process() {
-        auto* process = runqueue.front();
+    virtual void add_process(Process *process) {}
+
+    Process *get_next_process() {
+        auto *process = runqueue.front();
         runqueue.pop_front();
         return process;
     }
 
-    virtual void test_preempt(){}
+    virtual void test_preempt() {}
 
     virtual string get_name() const {}
 };
 
 
-class FCFS: public Scheduler{
+class FCFS : public Scheduler {
 public:
-    void add_process(Process* process) override{
+    void add_process(Process *process) override {
         runqueue.push_back(process);
     }
 
-    void test_preempt(){}
+    void test_preempt() {}
 
-    string get_name() const override {return "FCFS";}
+    string get_name() const override { return "FCFS"; }
 
 };
 
 
-class LCFS: public Scheduler{
+class LCFS : public Scheduler {
 public:
-    void add_process(Process* process){
+    void add_process(Process *process) {
         runqueue.push_back(process);
     }
 
-    void test_preempt(){}
+    void test_preempt() {}
 
-    string get_name() const override {return "LCFS";}
+    string get_name() const override { return "LCFS"; }
 };
 
 
-class SRTF: public Scheduler{
+class SRTF : public Scheduler {
 public:
-    void add_process(Process* process){
+    void add_process(Process *process) {
         runqueue.push_back(process);
     }
 
-    void test_preempt(){}
+    void test_preempt() {}
 
-    string get_name() const override {return "SRTF";}
+    string get_name() const override { return "SRTF"; }
 };
 
 
-class RR: public Scheduler{
+class RR : public Scheduler {
 public:
-    void add_process(Process* process){
+    void add_process(Process *process) {
         runqueue.push_back(process);
     }
 
-    void test_preempt(){}
+    void test_preempt() {}
 
-    string get_name() const override {return "RR";}
+    string get_name() const override { return "RR"; }
 };
 
 
-class PRIO: public Scheduler{
+class PRIO : public Scheduler {
 public:
-    void add_process(Process* process){
+    void add_process(Process *process) {
         runqueue.push_back(process);
     }
 
-    void test_preempt(){}
+    void test_preempt() {}
 
-    string get_name() const override {return "PRIO";}
+    string get_name() const override { return "PRIO"; }
 };
 
 
-class PREPRIO: public Scheduler{
+class PREPRIO : public Scheduler {
 public:
-    void add_process(Process* process){
+    void add_process(Process *process) {
         runqueue.push_back(process);
     }
 
-    void test_preempt(){}
+    void test_preempt() {}
 
-    string get_name() const override {return "PREPRIO";}
+    string get_name() const override { return "PREPRIO"; }
 };
 
 
-class Event{
+class Event {
     int timestamp;
-    Process* process;
+    Process *process;
     ProcessState old_state, new_state;
 public:
-    Event(int timestamp, Process* process, ProcessState old_state, ProcessState new_state)
-    :
-    timestamp(timestamp),
-    process(process),
-    old_state(old_state),
-    new_state(new_state) {}
+    Event(int timestamp, Process *process, ProcessState old_state, ProcessState new_state)
+            :
+            timestamp(timestamp),
+            process(process),
+            old_state(old_state),
+            new_state(new_state) {}
 
-    int get_time(){
+    int get_time() {
         return timestamp;
     }
 
-    Process* get_process(){
+    Process *get_process() {
         return process;
     }
 
-    ProcessState* get_transition_states(){
-        auto* states = new ProcessState[2];
+    ProcessState *get_transition_states() {
+        auto *states = new ProcessState[2];
         states[0] = old_state;
         states[1] = new_state;
         return states;
     }
 };
 
-typedef list <Event> eventQueue_t;
+typedef list<Event> eventQueue_t;
 
 
-class DiscreteEventSimulator{
+class DiscreteEventSimulator {
     eventQueue_t event_queue;
-    list <Process> finished_processes;
+    list<Process> finished_processes;
 
-    void print_metrics(const Scheduler* scheduler){
+    void print_metrics(const Scheduler *scheduler, int cpu_runtime, int io_time) {
         cout << scheduler->get_name() << endl;
-        for(auto process: finished_processes){
+        double total_turnaround = 0, total_cpu_wait = 0, proc_count = 0;
+
+        // Process specific metrics
+        for (auto process: finished_processes) {
+            int turnaround = process.finishing_time - process.AT;
             printf("%04d: %4d %4d %4d %4d %1d | %5d %5d %5d %5d\n",
-                   process.PID, process.AT,process.TC, process.CB,
-                   process.IO, process.static_priority,process.finishing_time,
-                   process.finishing_time - process.AT,
-                   process.static_priority, process.wait_time);
+                   process.PID, process.AT, process.TC, process.CB,
+                   process.IO, process.static_priority, process.finishing_time,
+                   turnaround, process.io_time, process.wait_time);
+
+            total_turnaround += turnaround;
+            total_cpu_wait += process.wait_time;
+            proc_count++;
         }
+
+        Process final_process = finished_processes.back();
+        // Summary
+        double cpu_utilizetion = 100.0 * (double) cpu_runtime / (double) final_process.finishing_time,
+                io_utilization = 100.0 * (double) io_time / (double) final_process.finishing_time,
+                avg_turnaround = total_turnaround / proc_count, avg_cpu_wait = total_cpu_wait / proc_count,
+                throughput = 100.0 * proc_count / (double) final_process.finishing_time;
+
+        printf("SUM: %d %.2lf %.2lf %.2lf %.2lf %.3lf\n", final_process.finishing_time, cpu_utilizetion, io_utilization,
+               avg_turnaround, avg_cpu_wait, throughput);
     }
 
-    bool process_queued_for_running(Process* process){
-        for(auto event: event_queue){
-            if(event.get_process() == process && event.get_transition_states()[1] == RUNNING){
+    bool process_queued_for_running(Process *process) {
+        for (auto event: event_queue) {
+            if (event.get_process() == process && event.get_transition_states()[1] == RUNNING) {
                 return true;
             }
         }
@@ -202,34 +226,36 @@ class DiscreteEventSimulator{
     }
 
 public:
-    void run_simulation(Scheduler* scheduler){
+    void run_simulation(Scheduler *scheduler) {
         /*
          * Orchestrate the events.
          */
-        int curr_time = 0;
-        while(!event_queue.empty()){
+        int curr_time = 0, cpu_runtime = 0, io_start = -1, io_end = -1, io_time = 0;
+        while (!event_queue.empty()) {
             Event curr_event = get_event();
-            curr_time = curr_event.get_time();
-            Process* curr_process = curr_event.get_process();
-            ProcessState* transition_states = curr_event.get_transition_states();
+            curr_time = curr_time > curr_event.get_time() ? curr_time : curr_event.get_time();
+            Process *curr_process = curr_event.get_process();
+            ProcessState *transition_states = curr_event.get_transition_states();
             curr_process->state = transition_states[1];
 
-            switch(curr_process->state){
-                case READY:{
-                    // Queue process to trigger scheduling.
+            switch (curr_process->state) {
+                case READY: {
+                    // Update.
                     curr_process->ready_stamp = curr_time;
+
+                    // Queue process to trigger scheduling.
                     scheduler->add_process(curr_process);
 
                     // Check if next running process is queued in events and create a run event if not.
-                    Process* next_running_process = scheduler->get_next_process();
-                    if(!process_queued_for_running(next_running_process)){
+                    Process *next_running_process = scheduler->get_next_process();
+                    if (!process_queued_for_running(next_running_process)) {
                         Event next_run_event(curr_time, next_running_process, READY, RUNNING);
                         put_event(next_run_event);
                     }
                     break;
                 }
 
-                case RUNNING:{
+                case RUNNING: {
                     int cpu_burst = myrandom(curr_process->CB);
                     int burst_ends[3] = {cpu_burst, curr_process->remaining_time, quantum};
 
@@ -241,27 +267,39 @@ public:
                     curr_process->wait_time += curr_time - curr_process->ready_stamp;
 
                     // Create a new event for this process only if the process doesn't end at the end of this one.
-                    if(curr_process->remaining_time > 0){
-                        Event* new_event;
-                        if(burst_time == curr_process->CB)
+                    if (curr_process->remaining_time > 0) {
+                        Event *new_event;
+                        if (burst_time == cpu_burst)
                             new_event = new Event(curr_time + burst_time, curr_process, RUNNING, BLOCKED);
                         else
                             new_event = new Event(curr_time + burst_time, curr_process, RUNNING, READY);
 
                         put_event(*new_event);
                     }
-                    // Enqueue finished processes.
-                    else{
+                        // Enqueue finished processes.
+                    else {
                         curr_process->finishing_time = curr_time + burst_time;
                         finished_processes.push_back(*curr_process);
                     }
+
+                    curr_time += burst_time;
+                    cpu_runtime += burst_time;
                     break;
                 }
 
-                case BLOCKED:{
+                case BLOCKED: {
+
                     int burst_time = myrandom(curr_process->IO);
-                    curr_process->io_time+=burst_time;
-                    Event new_event(curr_time + burst_time, curr_process, BLOCKED, READY);
+
+                    // Calculate last io_burst time metrics
+                    if (curr_time > io_end) {
+                        io_time += io_end - io_start;
+                        io_start = curr_time;
+                    }
+                    io_end = curr_time + burst_time;
+
+                    curr_process->io_time += burst_time;
+                    Event new_event(io_end, curr_process, BLOCKED, READY);
                     put_event(new_event);
                     break;
                 }
@@ -269,10 +307,10 @@ public:
         }
 
         // Print out the final summary.
-        print_metrics(scheduler);
+        print_metrics(scheduler, cpu_runtime, io_time);
     }
 
-    void put_event(Event event){
+    void put_event(Event event) {
         /*
          * Inserts an event to event queue in a time-sorted order.
          */
@@ -280,14 +318,14 @@ public:
         list<Event>::iterator it;
 
         // Find the time-sorted position in the event queue to insert at.
-        for(it = event_queue.begin(); it != event_queue.end(); it++){
-            if(event_time < (*it).get_time()) break;
+        for (it = event_queue.begin(); it != event_queue.end(); it++) {
+            if (event_time < (*it).get_time()) break;
         }
 
         event_queue.insert(it, event);
     }
 
-    Event get_event(){
+    Event get_event() {
         /*
          * Get the first event in queue and pop it from the list.
          */
@@ -296,20 +334,19 @@ public:
         return event;
     }
 
-    eventQueue_t get_event_queue(){
+    eventQueue_t get_event_queue() {
         return event_queue;
     }
 };
 
 
-void parseArgs(int argc, char **argv){
+void parseArgs(int argc, char **argv) {
     int c;
     // Disable getopt error output
     opterr = 0;
 
-    while ((c = getopt (argc, argv, "dvs:")) != -1)
-        switch (c)
-        {
+    while ((c = getopt(argc, argv, "dvs:")) != -1)
+        switch (c) {
             case 's':
                 sscanf(optarg, "%c%d:%d", &scheduler_code, &quantum, &maxprio);
                 break;
@@ -323,7 +360,7 @@ void parseArgs(int argc, char **argv){
                 if (optopt == 's')
                     fprintf(stderr, "Option -s is mandatory. Please provide the necesssary arguments.");
                 else
-                    fprintf (stderr, "Unknown option: '%d'", optopt);
+                    fprintf(stderr, "Unknown option: '%d'", optopt);
                 exit(1);
             default:
                 exit(1);
@@ -340,18 +377,18 @@ void parseArgs(int argc, char **argv){
 }
 
 
-DiscreteEventSimulator initializeSimulator(){
+DiscreteEventSimulator initializeSimulator() {
     DiscreteEventSimulator simulator;
     ifstream input_file(INPUT_FILE_PATH);
     int AT, TC, CB, IO, PID = 0;
 
-    if (!input_file){
-        cout << "File at " << INPUT_FILE_PATH <<" not found." << endl;
+    if (!input_file) {
+        cout << "File at " << INPUT_FILE_PATH << " not found." << endl;
         exit(1);
     }
 
-    while(input_file >> AT >> TC >> CB >> IO){
-        auto* process = new Process(AT, TC, CB, IO, PID);
+    while (input_file >> AT >> TC >> CB >> IO) {
+        auto *process = new Process(AT, TC, CB, IO, PID);
         Event event(AT, process, CREATED, READY);
         simulator.put_event(event);
         PID++;
@@ -360,31 +397,32 @@ DiscreteEventSimulator initializeSimulator(){
     return simulator;
 }
 
-void printEvents(DiscreteEventSimulator simulator){
+void printEvents(DiscreteEventSimulator simulator) {
     eventQueue_t queue = simulator.get_event_queue();
     cout << "Printing events..." << endl;
-    for(auto event : queue){
-        ProcessState* states = event.get_transition_states();
+    for (auto event: queue) {
+        ProcessState *states = event.get_transition_states();
         Process process = *event.get_process();
         int at = process.AT, tc = process.TC, cb = process.CB, io = process.IO, pid = process.PID;
         cout << "Time: " << event.get_time() << endl;
         printf("Process: AT: %d, TC: %d, CB: %d, IO: %d, PID: %d\n", at, tc, cb, io, pid);
-        cout << "Transition: " << state_string[states[0]] << "->" << state_string[states[1]] << endl << "###########################\n";
+        cout << "Transition: " << state_string[states[0]] << "->" << state_string[states[1]] << endl
+             << "###########################\n";
     }
 }
 
 
-int main (int argc, char **argv) {
+int main(int argc, char **argv) {
     parseArgs(argc, argv);
 
     // Initialize the simulator
     initRandNums();
     DiscreteEventSimulator simulator = initializeSimulator();
 
-    if(DEBUG) printEvents(simulator);
+    if (DEBUG) printEvents(simulator);
 
-    Scheduler* scheduler;
-    switch(scheduler_code){
+    Scheduler *scheduler;
+    switch (scheduler_code) {
         case 'F':
             scheduler = new FCFS();
             break;
