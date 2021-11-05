@@ -6,6 +6,7 @@
 #include <fstream>
 #include <algorithm>
 #include <iomanip>
+#include <map>
 
 using namespace std;
 
@@ -16,6 +17,9 @@ char scheduler_code;
 int ofs = 0, quantum = INT_MAX, maxprio = 4;
 vector<int> rand_vals;
 string INPUT_FILE_PATH, RAND_FILE_PATH;
+
+
+// Constants
 enum ProcessState {
     CREATED, READY, RUNNING, BLOCKED
 };
@@ -44,7 +48,8 @@ int myrandom(int burst) {
 
 class Process {
 public:
-    int AT, TC, CB, IO, PID, static_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
+    int AT, TC, CB, IO, PID, static_priority, dynamic_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
+    bool can_preempt = false;
     ProcessState state = CREATED;
 
     Process(int AT, int TC, int CB, int IO, int PID)
@@ -56,20 +61,23 @@ public:
             PID(PID),
             static_priority(myrandom(maxprio)),
             remaining_time(TC),
-            ready_stamp(AT) {}
+            ready_stamp(AT) {dynamic_priority = static_priority;}
 
 };
 
 
+typedef map<int, list<Process*>> mlqueue;
+
+
 class Scheduler {
 public:
-    list<Process *> runqueue;
+    list<Process *> run_queue;
 
     virtual void add_process(Process *process) {}
 
-    Process *get_next_process() {
-        auto *process = runqueue.front();
-        runqueue.pop_front();
+    virtual Process *get_next_process() {
+        auto *process = run_queue.front();
+        run_queue.pop_front();
         return process;
     }
 
@@ -82,7 +90,7 @@ public:
 class FCFS : public Scheduler {
 public:
     void add_process(Process *process) override {
-        runqueue.push_back(process);
+        run_queue.push_back(process);
     }
 
     void test_preempt() {}
@@ -94,8 +102,8 @@ public:
 
 class LCFS : public Scheduler {
 public:
-    void add_process(Process *process) {
-        runqueue.push_front(process);
+    void add_process(Process *process) final {
+        run_queue.push_front(process);
     }
 
     void test_preempt() {}
@@ -106,31 +114,27 @@ public:
 
 class SRTF : public Scheduler {
 public:
-    void add_process(Process *process) {
-        list<Process*>::iterator it;
-        for(it = runqueue.begin(); it != runqueue.end(); it++){
+    void add_process(Process *process) final {
+        list<Process *>::iterator it;
+        for (it = run_queue.begin(); it != run_queue.end(); it++) {
             if (process->remaining_time < (*it)->remaining_time) {
-                runqueue.insert(it, process);
+                run_queue.insert(it, process);
                 return;
             }
         }
 
-        runqueue.push_back(process);
+        run_queue.push_back(process);
     }
 
     void test_preempt() {}
 
-    string get_name() const override { return "SRTF"; }
+    string get_name() const final { return "SRTF"; }
 };
 
 
-class RR : public Scheduler {
+class RR : public FCFS {
 public:
-    RR(int quant_arg){quantum = quant_arg;}
-
-    void add_process(Process *process) {
-        runqueue.push_back(process);
-    }
+    explicit RR(int quant_arg) { quantum = quant_arg; }
 
     void test_preempt() {}
 
@@ -139,9 +143,58 @@ public:
 
 
 class PRIO : public Scheduler {
+    mlqueue expired_queue, run_queue;
+
+    static void insert_into_mlqueue(mlqueue &queue, Process* process){
+        if (queue.find(process->dynamic_priority) == queue.end()){
+            list<Process*> prio_queue;
+            queue[process->dynamic_priority] = prio_queue;
+        }
+        queue[process->dynamic_priority].push_back(process);
+    }
+
+    static Process* pop_mlqueue(mlqueue &queue){
+        /*
+         * Pick the first process with the highest priority and pop it out.
+         */
+        Process *next_proc = nullptr;
+        for(auto p_level=queue.rbegin(); p_level != queue.rend(); ++p_level){
+            list<Process*> p_queue = p_level->second;
+            if (p_queue.empty()) continue;
+            next_proc = p_queue.front();
+            p_queue.pop_front();
+            break;
+        }
+
+        return next_proc;
+    }
 public:
-    void add_process(Process *process) {
-        runqueue.push_back(process);
+    explicit PRIO(int quant_arg) { quantum = quant_arg; }
+
+    void add_process(Process *process) override {
+        // Process being added to queue, decrement dynamic priority.
+        process->dynamic_priority--;
+
+        // Insert either into expired or MLQ.
+        if (process->dynamic_priority < 0){
+            process->dynamic_priority = process->static_priority - 1;
+            insert_into_mlqueue(expired_queue, process);
+        }
+        else{
+            insert_into_mlqueue(run_queue, process);
+        }
+    }
+
+    Process *get_next_process() {
+        Process* next_proc = pop_mlqueue(run_queue);
+
+        if (next_proc == nullptr){
+            mlqueue temp;
+            swap(run_queue, expired_queue);
+            next_proc = pop_mlqueue(run_queue);
+        }
+
+        return next_proc;
     }
 
     void test_preempt() {}
@@ -150,10 +203,13 @@ public:
 };
 
 
-class PREPRIO : public Scheduler {
+class PREPRIO : public PRIO {
 public:
-    void add_process(Process *process) {
-        runqueue.push_back(process);
+    explicit PREPRIO(int quant_arg) : PRIO(quant_arg) {}
+
+    void add_process(Process* process) final{
+        process->can_preempt = true;
+        PRIO::add_process(process);
     }
 
     void test_preempt() {}
@@ -174,12 +230,17 @@ public:
             old_state(old_state),
             new_state(new_state) {}
 
-    int get_time() {
+    int get_time() const {
         return timestamp;
     }
 
-    void set_time(int time){
+    void set_time(int time) {
         timestamp = time;
+    }
+
+    void set_transition(ProcessState from, ProcessState to){
+        old_state = from;
+        new_state = to;
     }
 
     Process *get_process() {
@@ -195,7 +256,7 @@ public:
 };
 
 
-typedef list<Event*> eventQueue_t;
+typedef list<Event *> eventQueue_t;
 
 
 class DiscreteEventSimulator {
@@ -240,10 +301,10 @@ class DiscreteEventSimulator {
         return false;
     }
 
-    void update_ready_to_run_events(int burst_end){
-        for(auto event : event_queue){
+    void update_ready_to_run_events(int burst_end) {
+        for (auto event: event_queue) {
             if (event->get_transition_states()[1] == RUNNING)
-            event->set_time(burst_end);
+                event->set_time(burst_end);
         }
     }
 
@@ -272,13 +333,21 @@ public:
                     Process *next_running_process = scheduler->get_next_process();
                     if (!process_queued_for_running(next_running_process)) {
                         int run_time = curr_time;
-                        for(auto evt: event_queue){
-                            if (evt->get_transition_states()[1] == BLOCKED && evt->get_time() > run_time){
-                                run_time = evt->get_time();
+                        for (auto evt: event_queue) {
+                            // Find the IO transition event of currently running process.
+                            if (evt->get_transition_states()[1] == BLOCKED && evt->get_time() > run_time) {
+                                // Preempt the current running process if higher priority proc waiting.
+                                if (next_running_process->can_preempt){
+                                    evt->set_transition(RUNNING, READY);
+                                    evt->set_time(curr_time);
+                                }
+
+                                else
+                                    run_time = evt->get_time();
                                 break;
                             }
                         }
-                        auto* next_run_event = new Event(run_time, next_running_process, READY, RUNNING);
+                        auto *next_run_event = new Event(run_time, next_running_process, READY, RUNNING);
                         put_event(next_run_event);
                     }
                     break;
@@ -307,7 +376,7 @@ public:
                         put_event(new_event);
                     }
 
-                    // Enqueue finished processes.
+                        // Enqueue finished processes.
                     else {
                         curr_process->finishing_time = curr_time + burst_time;
                         finished_processes.push_back(*curr_process);
@@ -326,10 +395,9 @@ public:
                     int curr_end = curr_time + burst_time;
 
                     // Calculate last io_burst time metrics
-                    if (curr_time >= io_end){
+                    if (curr_time >= io_end) {
                         io_time += burst_time;
-                    }
-                    else if (curr_end > io_end){
+                    } else if (curr_end > io_end) {
                         io_time += curr_end - io_end;
                     }
 
@@ -337,7 +405,7 @@ public:
                     io_end = curr_end > io_end ? curr_end : io_end;
 
                     curr_process->io_time += burst_time;
-                    auto* new_event = new Event(io_end, curr_process, BLOCKED, READY);
+                    auto *new_event = new Event(io_end, curr_process, BLOCKED, READY);
                     put_event(new_event);
                     break;
                 }
@@ -348,7 +416,7 @@ public:
         print_metrics(scheduler, cpu_runtime, io_time);
     }
 
-    void put_event(Event* event) {
+    void put_event(Event *event) {
         event_queue.push_back(event);
     }
 
@@ -356,8 +424,8 @@ public:
         /*
          * Get the earliest event in queue and pop it from the list.
          */
-        Event* earliest_event = event_queue.front();
-        for(auto event : event_queue){
+        Event *earliest_event = event_queue.front();
+        for (auto event: event_queue) {
             if (event->get_time() < earliest_event->get_time())
                 earliest_event = event;
         }
@@ -422,7 +490,7 @@ DiscreteEventSimulator initializeSimulator() {
 
     while (input_file >> AT >> TC >> CB >> IO) {
         auto *process = new Process(AT, TC, CB, IO, PID);
-        auto* event = new Event(AT, process, CREATED, READY);
+        auto *event = new Event(AT, process, CREATED, READY);
         simulator.put_event(event);
         PID++;
     }
@@ -470,10 +538,10 @@ int main(int argc, char **argv) {
             scheduler = new RR(quant_arg);
             break;
         case 'P':
-            scheduler = new PRIO();
+            scheduler = new PRIO(quant_arg);
             break;
         case 'E':
-            scheduler = new PREPRIO();
+            scheduler = new PREPRIO(quant_arg);
             break;
         default:
             cout << "Invalid scheduler code: " << scheduler_code;
