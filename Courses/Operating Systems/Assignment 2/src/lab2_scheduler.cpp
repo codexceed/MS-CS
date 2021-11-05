@@ -95,7 +95,7 @@ public:
 class LCFS : public Scheduler {
 public:
     void add_process(Process *process) {
-        runqueue.push_back(process);
+        runqueue.push_front(process);
     }
 
     void test_preempt() {}
@@ -107,6 +107,14 @@ public:
 class SRTF : public Scheduler {
 public:
     void add_process(Process *process) {
+        list<Process*>::iterator it;
+        for(it = runqueue.begin(); it != runqueue.end(); it++){
+            if (process->remaining_time < (*it)->remaining_time) {
+                runqueue.insert(it, process);
+                return;
+            }
+        }
+
         runqueue.push_back(process);
     }
 
@@ -118,6 +126,8 @@ public:
 
 class RR : public Scheduler {
 public:
+    RR(int quant_arg){quantum = quant_arg;}
+
     void add_process(Process *process) {
         runqueue.push_back(process);
     }
@@ -168,6 +178,10 @@ public:
         return timestamp;
     }
 
+    void set_time(int time){
+        timestamp = time;
+    }
+
     Process *get_process() {
         return process;
     }
@@ -180,7 +194,8 @@ public:
     }
 };
 
-typedef list<Event> eventQueue_t;
+
+typedef list<Event*> eventQueue_t;
 
 
 class DiscreteEventSimulator {
@@ -217,12 +232,19 @@ class DiscreteEventSimulator {
 
     bool process_queued_for_running(Process *process) {
         for (auto event: event_queue) {
-            if (event.get_process() == process && event.get_transition_states()[1] == RUNNING) {
+            if (event->get_process() == process && event->get_transition_states()[1] == RUNNING) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    void update_ready_to_run_events(int burst_end){
+        for(auto event : event_queue){
+            if (event->get_transition_states()[1] == RUNNING)
+            event->set_time(burst_end);
+        }
     }
 
 public:
@@ -233,7 +255,7 @@ public:
         int curr_time = 0, cpu_runtime = 0, io_end = -1, io_time = 0;
         while (!event_queue.empty()) {
             Event curr_event = get_event();
-            curr_time = curr_time > curr_event.get_time() ? curr_time : curr_event.get_time();
+            curr_time = curr_event.get_time();
             Process *curr_process = curr_event.get_process();
             ProcessState *transition_states = curr_event.get_transition_states();
             curr_process->state = transition_states[1];
@@ -249,7 +271,14 @@ public:
                     // Check if next running process is queued in events and create a run event if not.
                     Process *next_running_process = scheduler->get_next_process();
                     if (!process_queued_for_running(next_running_process)) {
-                        Event next_run_event(curr_time, next_running_process, READY, RUNNING);
+                        int run_time = curr_time;
+                        for(auto evt: event_queue){
+                            if (evt->get_transition_states()[1] == BLOCKED && evt->get_time() > run_time){
+                                run_time = evt->get_time();
+                                break;
+                            }
+                        }
+                        auto* next_run_event = new Event(run_time, next_running_process, READY, RUNNING);
                         put_event(next_run_event);
                     }
                     break;
@@ -261,6 +290,7 @@ public:
 
                     // Determine out the shortest time period between the burst, quantum and remaining time.
                     int burst_time = *min_element(begin(burst_ends), end(burst_ends));
+                    int burst_end_time = curr_time + burst_time;
 
                     // Update process time metrics
                     curr_process->remaining_time -= burst_time;
@@ -270,11 +300,11 @@ public:
                     if (curr_process->remaining_time > 0) {
                         Event *new_event;
                         if (burst_time == cpu_burst)
-                            new_event = new Event(curr_time + burst_time, curr_process, RUNNING, BLOCKED);
+                            new_event = new Event(burst_end_time, curr_process, RUNNING, BLOCKED);
                         else
-                            new_event = new Event(curr_time + burst_time, curr_process, RUNNING, READY);
+                            new_event = new Event(burst_end_time, curr_process, RUNNING, READY);
 
-                        put_event(*new_event);
+                        put_event(new_event);
                     }
 
                     // Enqueue finished processes.
@@ -283,7 +313,9 @@ public:
                         finished_processes.push_back(*curr_process);
                     }
 
-                    curr_time += burst_time;
+                    // Update ready->running transition events
+                    update_ready_to_run_events(burst_end_time);
+
                     cpu_runtime += burst_time;
                     break;
                 }
@@ -305,7 +337,7 @@ public:
                     io_end = curr_end > io_end ? curr_end : io_end;
 
                     curr_process->io_time += burst_time;
-                    Event new_event(io_end, curr_process, BLOCKED, READY);
+                    auto* new_event = new Event(io_end, curr_process, BLOCKED, READY);
                     put_event(new_event);
                     break;
                 }
@@ -316,28 +348,21 @@ public:
         print_metrics(scheduler, cpu_runtime, io_time);
     }
 
-    void put_event(Event event) {
-        /*
-         * Inserts an event to event queue in a time-sorted order.
-         */
-        int event_time = event.get_time();
-        list<Event>::iterator it;
-
-        // Find the time-sorted position in the event queue to insert at.
-        for (it = event_queue.begin(); it != event_queue.end(); it++) {
-            if (event_time < (*it).get_time()) break;
-        }
-
-        event_queue.insert(it, event);
+    void put_event(Event* event) {
+        event_queue.push_back(event);
     }
 
     Event get_event() {
         /*
-         * Get the first event in queue and pop it from the list.
+         * Get the earliest event in queue and pop it from the list.
          */
-        Event event = event_queue.front();
-        event_queue.pop_front();
-        return event;
+        Event* earliest_event = event_queue.front();
+        for(auto event : event_queue){
+            if (event->get_time() < earliest_event->get_time())
+                earliest_event = event;
+        }
+        event_queue.remove(earliest_event);
+        return *earliest_event;
     }
 
     eventQueue_t get_event_queue() {
@@ -346,15 +371,15 @@ public:
 };
 
 
-void parseArgs(int argc, char **argv) {
-    int c;
+int parseArgs(int argc, char **argv) {
+    int c, quant_arg;
     // Disable getopt error output
     opterr = 0;
 
     while ((c = getopt(argc, argv, "dvs:")) != -1)
         switch (c) {
             case 's':
-                sscanf(optarg, "%c%d:%d", &scheduler_code, &quantum, &maxprio);
+                sscanf(optarg, "%c%d:%d", &scheduler_code, &quant_arg, &maxprio);
                 break;
             case 'd':
                 DEBUG = true;
@@ -380,6 +405,8 @@ void parseArgs(int argc, char **argv) {
 
     INPUT_FILE_PATH = argv[optind];
     RAND_FILE_PATH = argv[++optind];
+
+    return quant_arg;
 }
 
 
@@ -395,7 +422,7 @@ DiscreteEventSimulator initializeSimulator() {
 
     while (input_file >> AT >> TC >> CB >> IO) {
         auto *process = new Process(AT, TC, CB, IO, PID);
-        Event event(AT, process, CREATED, READY);
+        auto* event = new Event(AT, process, CREATED, READY);
         simulator.put_event(event);
         PID++;
     }
@@ -403,14 +430,15 @@ DiscreteEventSimulator initializeSimulator() {
     return simulator;
 }
 
+
 void printEvents(DiscreteEventSimulator simulator) {
     eventQueue_t queue = simulator.get_event_queue();
     cout << "Printing events..." << endl;
     for (auto event: queue) {
-        ProcessState *states = event.get_transition_states();
-        Process process = *event.get_process();
+        ProcessState *states = event->get_transition_states();
+        Process process = *event->get_process();
         int at = process.AT, tc = process.TC, cb = process.CB, io = process.IO, pid = process.PID;
-        cout << "Time: " << event.get_time() << endl;
+        cout << "Time: " << event->get_time() << endl;
         printf("Process: AT: %d, TC: %d, CB: %d, IO: %d, PID: %d\n", at, tc, cb, io, pid);
         cout << "Transition: " << state_string[states[0]] << "->" << state_string[states[1]] << endl
              << "###########################\n";
@@ -419,7 +447,7 @@ void printEvents(DiscreteEventSimulator simulator) {
 
 
 int main(int argc, char **argv) {
-    parseArgs(argc, argv);
+    int quant_arg = parseArgs(argc, argv);
 
     // Initialize the simulator
     initRandNums();
@@ -439,7 +467,7 @@ int main(int argc, char **argv) {
             scheduler = new SRTF();
             break;
         case 'R':
-            scheduler = new RR();
+            scheduler = new RR(quant_arg);
             break;
         case 'P':
             scheduler = new PRIO();
