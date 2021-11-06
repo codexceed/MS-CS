@@ -76,7 +76,8 @@ public:
 
     virtual Process *get_next_process() {
         auto *process = run_queue.front();
-        run_queue.pop_front();
+        if (!run_queue.empty())
+            run_queue.pop_front();
         return process;
     }
 
@@ -152,16 +153,19 @@ class PRIO : public Scheduler {
         queue[process->dynamic_priority].push_back(process);
     }
 
-    static Process *pop_mlqueue(mlqueue &queue) {
+    Process *pop_mlqueue() {
         /*
          * Pick the first process with the highest priority and pop it out.
          */
         Process *next_proc = nullptr;
-        for (auto p_level = queue.rbegin(); p_level != queue.rend(); ++p_level) {
+        for (auto p_level = run_queue.rbegin(); p_level != run_queue.rend(); ++p_level) {
             list<Process *> p_queue = p_level->second;
             if (p_queue.empty()) continue;
             next_proc = p_queue.front();
             p_queue.pop_front();
+            run_queue[p_level->first] = p_queue;
+            if (p_queue.empty())
+                run_queue.erase(p_level->first);
             break;
         }
 
@@ -184,13 +188,13 @@ public:
         }
     }
 
-    Process *get_next_process() {
-        Process *next_proc = pop_mlqueue(run_queue);
+    Process *get_next_process() override {
+        Process *next_proc = pop_mlqueue();
 
         if (next_proc == nullptr) {
             mlqueue temp;
             swap(run_queue, expired_queue);
-            next_proc = pop_mlqueue(run_queue);
+            next_proc = pop_mlqueue();
         }
 
         return next_proc;
@@ -316,6 +320,26 @@ class DiscreteEventSimulator {
         }
     }
 
+    Event* peek_next_event(){
+        Event *earliest_event = event_queue.front();
+        map<ProcessState, int> state_order{{READY,   0},
+                                           {BLOCKED, 1},
+                                           {RUNNING, 2}};
+        for (auto event: event_queue) {
+            if (event->get_time() < earliest_event->get_time())
+                earliest_event = event;
+
+                // Event order needs to consider state transition priority as well.
+            else if (event->get_time() == earliest_event->get_time()) {
+                ProcessState earliest_state = earliest_event->get_transition_states()[1], event_state = event->get_transition_states()[1];
+                if (state_order[event_state] < state_order[earliest_state])
+                    earliest_event = event;
+            }
+        }
+
+        return earliest_event;
+    }
+
 public:
     void run_simulation(Scheduler *scheduler) {
         /*
@@ -341,9 +365,14 @@ public:
                         printf("%d %d:  -> READY prio=%d\n", curr_time, curr_process->PID,
                                curr_process->dynamic_priority);
 
-                    // Check if next running process is queued in events and create a run event if not.
-                    Process *next_running_process = scheduler->get_next_process();
-                    if (!process_queued_for_running(next_running_process)) {
+                    // Do not schedule next running event until all transitions to ready at current timestamp are done.
+                    Event* next_event = peek_next_event();
+                    if (next_event != nullptr && next_event->get_transition_states()[1] == READY && next_event->get_time() == curr_time)
+                        continue;
+
+                    // Schedule all ready processes.
+                    Process* next_running_process = scheduler->get_next_process();
+                    while(next_running_process){
                         int run_time = curr_time;
                         for (auto evt: event_queue) {
                             // Find the IO transition event of currently running process.
@@ -360,6 +389,7 @@ public:
                         }
                         auto *next_run_event = new Event(run_time, next_running_process, READY, RUNNING);
                         put_event(next_run_event);
+                        next_running_process = scheduler->get_next_process();
                     }
                     break;
                 }
@@ -457,21 +487,7 @@ public:
         /*
          * Get the earliest event in queue and pop it from the list.
          */
-        Event *earliest_event = event_queue.front();
-        map<ProcessState, int> state_order{{READY,   0},
-                                           {BLOCKED, 1},
-                                           {RUNNING, 2}};
-        for (auto event: event_queue) {
-            if (event->get_time() < earliest_event->get_time())
-                earliest_event = event;
-
-                // Event order needs to consider state transition priority as well.
-            else if (event->get_time() == earliest_event->get_time()) {
-                ProcessState earliest_state = earliest_event->get_transition_states()[1], event_state = event->get_transition_states()[1];
-                if (state_order[event_state] < state_order[earliest_state])
-                    earliest_event = event;
-            }
-        }
+        Event *earliest_event = peek_next_event();
         event_queue.remove(earliest_event);
         return *earliest_event;
     }
