@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <fstream>
 #include <algorithm>
-#include <iomanip>
 #include <map>
 
 using namespace std;
@@ -21,7 +20,7 @@ string INPUT_FILE_PATH, RAND_FILE_PATH;
 
 // Constants
 enum ProcessState {
-    CREATED, READY, RUNNING, BLOCKED
+    CREATED, READY, RUNNING, BLOCKED, TERMINATED
 };
 static const char *state_string[] = {"CREATED", "READY", "RUNNG", "BLOCK"};
 enum StateTransition {
@@ -61,12 +60,12 @@ public:
             PID(PID),
             static_priority(myrandom(maxprio)),
             remaining_time(TC),
-            ready_stamp(AT) {dynamic_priority = static_priority;}
+            ready_stamp(AT) { dynamic_priority = static_priority; }
 
 };
 
 
-typedef map<int, list<Process*>> mlqueue;
+typedef map<int, list<Process *>> mlqueue;
 
 
 class Scheduler {
@@ -145,21 +144,21 @@ public:
 class PRIO : public Scheduler {
     mlqueue expired_queue, run_queue;
 
-    static void insert_into_mlqueue(mlqueue &queue, Process* process){
-        if (queue.find(process->dynamic_priority) == queue.end()){
-            list<Process*> prio_queue;
+    static void insert_into_mlqueue(mlqueue &queue, Process *process) {
+        if (queue.find(process->dynamic_priority) == queue.end()) {
+            list<Process *> prio_queue;
             queue[process->dynamic_priority] = prio_queue;
         }
         queue[process->dynamic_priority].push_back(process);
     }
 
-    static Process* pop_mlqueue(mlqueue &queue){
+    static Process *pop_mlqueue(mlqueue &queue) {
         /*
          * Pick the first process with the highest priority and pop it out.
          */
         Process *next_proc = nullptr;
-        for(auto p_level=queue.rbegin(); p_level != queue.rend(); ++p_level){
-            list<Process*> p_queue = p_level->second;
+        for (auto p_level = queue.rbegin(); p_level != queue.rend(); ++p_level) {
+            list<Process *> p_queue = p_level->second;
             if (p_queue.empty()) continue;
             next_proc = p_queue.front();
             p_queue.pop_front();
@@ -168,6 +167,7 @@ class PRIO : public Scheduler {
 
         return next_proc;
     }
+
 public:
     explicit PRIO(int quant_arg) { quantum = quant_arg; }
 
@@ -176,19 +176,18 @@ public:
         process->dynamic_priority--;
 
         // Insert either into expired or MLQ.
-        if (process->dynamic_priority < 0){
+        if (process->dynamic_priority < 0) {
             process->dynamic_priority = process->static_priority - 1;
             insert_into_mlqueue(expired_queue, process);
-        }
-        else{
+        } else {
             insert_into_mlqueue(run_queue, process);
         }
     }
 
     Process *get_next_process() {
-        Process* next_proc = pop_mlqueue(run_queue);
+        Process *next_proc = pop_mlqueue(run_queue);
 
-        if (next_proc == nullptr){
+        if (next_proc == nullptr) {
             mlqueue temp;
             swap(run_queue, expired_queue);
             next_proc = pop_mlqueue(run_queue);
@@ -207,7 +206,7 @@ class PREPRIO : public PRIO {
 public:
     explicit PREPRIO(int quant_arg) : PRIO(quant_arg) {}
 
-    void add_process(Process* process) final{
+    void add_process(Process *process) final {
         process->can_preempt = true;
         PRIO::add_process(process);
     }
@@ -238,7 +237,7 @@ public:
         timestamp = time;
     }
 
-    void set_transition(ProcessState from, ProcessState to){
+    void set_transition(ProcessState from, ProcessState to) {
         old_state = from;
         new_state = to;
     }
@@ -280,7 +279,13 @@ class DiscreteEventSimulator {
             proc_count++;
         }
 
-        Process final_process = finished_processes.back();
+        // Find the process that ends last.
+        Process final_process = finished_processes.front();
+        for (auto process: finished_processes) {
+            if (process.finishing_time > final_process.finishing_time)
+                final_process = process;
+        }
+
         // Summary
         double cpu_utilizetion = 100.0 * (double) cpu_runtime / (double) final_process.finishing_time,
                 io_utilization = 100.0 * (double) io_time / (double) final_process.finishing_time,
@@ -301,10 +306,13 @@ class DiscreteEventSimulator {
         return false;
     }
 
-    void update_ready_to_run_events(int burst_end) {
+    void update_ready_to_run_events(int time) {
+        /*
+         * Update ready to run events to trigger at a given time.
+         */
         for (auto event: event_queue) {
             if (event->get_transition_states()[1] == RUNNING)
-                event->set_time(burst_end);
+                event->set_time(time);
         }
     }
 
@@ -329,20 +337,23 @@ public:
                     // Queue process to trigger scheduling.
                     scheduler->add_process(curr_process);
 
+                    if (VERBOSE)
+                        printf("%d %d:  -> READY prio=%d\n", curr_time, curr_process->PID,
+                               curr_process->dynamic_priority);
+
                     // Check if next running process is queued in events and create a run event if not.
                     Process *next_running_process = scheduler->get_next_process();
                     if (!process_queued_for_running(next_running_process)) {
                         int run_time = curr_time;
                         for (auto evt: event_queue) {
                             // Find the IO transition event of currently running process.
-                            if (evt->get_transition_states()[1] == BLOCKED && evt->get_time() > run_time) {
+                            if ((evt->get_transition_states()[1] == BLOCKED ||
+                                 evt->get_transition_states()[1] == TERMINATED) && evt->get_time() > run_time) {
                                 // Preempt the current running process if higher priority proc waiting.
-                                if (next_running_process->can_preempt){
+                                if (next_running_process->can_preempt) {
                                     evt->set_transition(RUNNING, READY);
                                     evt->set_time(curr_time);
-                                }
-
-                                else
+                                } else
                                     run_time = evt->get_time();
                                 break;
                             }
@@ -357,30 +368,32 @@ public:
                     int cpu_burst = myrandom(curr_process->CB);
                     int burst_ends[3] = {cpu_burst, curr_process->remaining_time, quantum};
 
-                    // Determine out the shortest time period between the burst, quantum and remaining time.
+                    // Determine the shortest time period between the burst, quantum and remaining time.
                     int burst_time = *min_element(begin(burst_ends), end(burst_ends));
                     int burst_end_time = curr_time + burst_time;
+
+                    if (VERBOSE)
+                        printf("%d %d: READY -> RUNNG cb=%d rem=%d prio=%d\n", curr_time, curr_process->PID, burst_time,
+                               curr_process->remaining_time, curr_process->dynamic_priority);
 
                     // Update process time metrics
                     curr_process->remaining_time -= burst_time;
                     curr_process->wait_time += curr_time - curr_process->ready_stamp;
 
                     // Create a new event for this process only if the process doesn't end at the end of this one.
+                    Event *new_event;
                     if (curr_process->remaining_time > 0) {
-                        Event *new_event;
                         if (burst_time == cpu_burst)
                             new_event = new Event(burst_end_time, curr_process, RUNNING, BLOCKED);
                         else
                             new_event = new Event(burst_end_time, curr_process, RUNNING, READY);
-
-                        put_event(new_event);
                     }
 
-                        // Enqueue finished processes.
-                    else {
-                        curr_process->finishing_time = curr_time + burst_time;
-                        finished_processes.push_back(*curr_process);
-                    }
+                        // Enqueue process termination event.
+                    else
+                        new_event = new Event(burst_end_time, curr_process, RUNNING, TERMINATED);
+
+                    put_event(new_event);
 
                     // Update ready->running transition events
                     update_ready_to_run_events(burst_end_time);
@@ -404,10 +417,30 @@ public:
                     // Update IO period.
                     io_end = curr_end > io_end ? curr_end : io_end;
 
+                    if (VERBOSE)
+                        printf("%d %d: RUNNG -> BLOCK ib=%d rem=%d\n", curr_time, curr_process->PID, burst_time,
+                               curr_process->remaining_time);
+
                     curr_process->io_time += burst_time;
-                    auto *new_event = new Event(io_end, curr_process, BLOCKED, READY);
+                    auto *new_event = new Event(curr_end, curr_process, BLOCKED, READY);
                     put_event(new_event);
                     break;
+                }
+
+                case TERMINATED: {
+                    curr_process->finishing_time = curr_time;
+                    list<Process>::iterator proc_it;
+                    for (proc_it = finished_processes.begin(); proc_it != finished_processes.end(); proc_it++) {
+                        if ((*proc_it).PID > curr_process->PID)
+                            break;
+                    }
+                    if (proc_it == finished_processes.end())
+                        finished_processes.push_back(*curr_process);
+                    else
+                        finished_processes.insert(proc_it, *curr_process);
+
+                    if (VERBOSE)
+                        printf("%d %d Done\n", curr_process->finishing_time, curr_process->PID);
                 }
             }
         }
@@ -425,9 +458,19 @@ public:
          * Get the earliest event in queue and pop it from the list.
          */
         Event *earliest_event = event_queue.front();
+        map<ProcessState, int> state_order{{READY,   0},
+                                           {BLOCKED, 1},
+                                           {RUNNING, 2}};
         for (auto event: event_queue) {
             if (event->get_time() < earliest_event->get_time())
                 earliest_event = event;
+
+                // Event order needs to consider state transition priority as well.
+            else if (event->get_time() == earliest_event->get_time()) {
+                ProcessState earliest_state = earliest_event->get_transition_states()[1], event_state = event->get_transition_states()[1];
+                if (state_order[event_state] < state_order[earliest_state])
+                    earliest_event = event;
+            }
         }
         event_queue.remove(earliest_event);
         return *earliest_event;
