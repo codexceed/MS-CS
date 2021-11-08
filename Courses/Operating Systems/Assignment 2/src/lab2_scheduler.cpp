@@ -47,7 +47,7 @@ int myrandom(int burst) {
 
 class Process {
 public:
-    int AT, TC, CB, IO, PID, static_priority, dynamic_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
+    int AT, TC, CB, IO, PID, burst=0, static_priority, dynamic_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
     bool can_preempt = false;
     ProcessState state = CREATED;
 
@@ -281,7 +281,8 @@ class DiscreteEventSimulator {
     list<Process> finished_processes;
 
     void print_metrics(const Scheduler *scheduler, int cpu_runtime, int io_time) {
-        cout << scheduler->get_name() << endl;
+        string print_quant = quantum == INT_MAX ? "" : to_string(quantum);
+        cout << scheduler->get_name() << " " << print_quant << endl;
         double total_turnaround = 0, total_cpu_wait = 0, proc_count = 0;
 
         // Process specific metrics
@@ -312,16 +313,6 @@ class DiscreteEventSimulator {
 
         printf("SUM: %d %.2lf %.2lf %.2lf %.2lf %.3lf\n", final_process.finishing_time, cpu_utilizetion, io_utilization,
                avg_turnaround, avg_cpu_wait, throughput);
-    }
-
-    bool process_queued_for_running(Process *process) {
-        for (auto event: event_queue) {
-            if (event->get_process() == process && event->get_transition_states()[1] == RUNNING) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     void update_ready_to_run_events(int time) {
@@ -438,15 +429,24 @@ public:
                 }
 
                 case RUNNING: {
-                    int cpu_burst = myrandom(curr_process->CB);
-                    int burst_ends[3] = {cpu_burst, curr_process->remaining_time, quantum};
+                    // Check if there's residual CPU burst time from prior preemption.
+                    int cpu_burst;
+                    if(curr_process->burst == 0){
+                        cpu_burst = myrandom(curr_process->CB);
+                        curr_process->burst = cpu_burst;
+                    }
+                    else
+                        cpu_burst = curr_process->burst;
+
+                    int burst_candidates[3] = {cpu_burst, curr_process->remaining_time, quantum};
 
                     // Determine the shortest time period between the burst, quantum and remaining time.
-                    int burst_time = *min_element(begin(burst_ends), end(burst_ends));
+                    int burst_time = *min_element(begin(burst_candidates), end(burst_candidates));
+                    curr_process->burst -= burst_time;
                     int burst_end_time = curr_time + burst_time;
 
                     if (VERBOSE)
-                        printf("%d %d: READY -> RUNNG cb=%d rem=%d prio=%d\n", curr_time, curr_process->PID, burst_time,
+                        printf("%d %d: READY -> RUNNG cb=%d rem=%d prio=%d\n", curr_time, curr_process->PID, cpu_burst,
                                curr_process->remaining_time, curr_process->dynamic_priority);
 
                     // Update process time metrics
