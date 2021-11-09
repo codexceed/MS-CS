@@ -47,8 +47,8 @@ int myrandom(int burst) {
 
 class Process {
 public:
-    int AT, TC, CB, IO, PID, burst=0, static_priority, dynamic_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
-    bool can_preempt = false;
+    int AT, TC, CB, IO, PID, burst = 0, static_priority, dynamic_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
+    bool prioritised = false, can_preempt = false;
     ProcessState state = CREATED;
 
     Process(int AT, int TC, int CB, int IO, int PID)
@@ -183,9 +183,20 @@ class PRIO : public Scheduler {
     }
 
 public:
-    explicit PRIO(int quant_arg) { quantum = quant_arg; }
+    explicit PRIO(int quant_arg) {
+        quantum = quant_arg;
+    }
+
+    void swap_queues(){
+        mlqueue temp;
+        temp = run_queue;
+        run_queue = expired_queue;
+        expired_queue = temp;
+    }
 
     void add_process(Process *process) override {
+        process->prioritised = true;
+
         // Process being added to queue, decrement dynamic priority.
         process->dynamic_priority--;
 
@@ -206,8 +217,7 @@ public:
         Process *next_proc = pop_mlqueue();
 
         if (next_proc == nullptr) {
-            mlqueue temp;
-            swap(run_queue, expired_queue);
+            swap_queues();
             next_proc = pop_mlqueue();
         }
 
@@ -225,6 +235,7 @@ public:
     explicit PREPRIO(int quant_arg) : PRIO(quant_arg) {}
 
     void add_process(Process *process) final {
+        process->prioritised = true;
         process->can_preempt = true;
         PRIO::add_process(process);
     }
@@ -335,10 +346,16 @@ class DiscreteEventSimulator {
             if (event->get_time() < earliest_event->get_time())
                 earliest_event = event;
 
-                // Event order needs to consider state transition priority as well.
+            // Event order needs to consider state transition and priority as well.
             else if (event->get_time() == earliest_event->get_time()) {
                 ProcessState earliest_state = earliest_event->get_transition_states()[1], event_state = event->get_transition_states()[1];
+                Process *earliest_process = earliest_event->get_process(), *event_process = event->get_process();
+
                 if (state_order[event_state] < state_order[earliest_state])
+                    earliest_event = event;
+
+                else if (earliest_state == RUNNING && event_state == RUNNING && event_process->can_preempt &&
+                         earliest_process->dynamic_priority < event_process->dynamic_priority)
                     earliest_event = event;
             }
         }
@@ -357,7 +374,7 @@ class DiscreteEventSimulator {
         put_event(next_run_event);
     }
 
-    Event *get_current_running_process() {
+    Event *get_current_run_end_event() {
         Event *running_event = nullptr;
         for (auto event: event_queue) {
             if (event->get_transition_states()[0] == RUNNING)
@@ -384,12 +401,13 @@ public:
                     // Update.
                     curr_process->ready_stamp = curr_time;
 
+                    if (VERBOSE)
+                        printf("%d %d: %s -> READY prio=%d\n", curr_time, curr_process->PID,
+                               state_string[transition_states[0]],
+                               curr_process->dynamic_priority);
+
                     // Queue process to trigger scheduling.
                     scheduler->add_process(curr_process);
-
-                    if (VERBOSE)
-                        printf("%d %d:  -> READY prio=%d\n", curr_time, curr_process->PID,
-                               curr_process->dynamic_priority);
 
                     // Do not schedule next running event until all transitions to ready at current timestamp are done.
                     Event *next_event = peek_next_event();
@@ -399,28 +417,39 @@ public:
 
                     // Schedule next process to run only if it's higher priority or if nothing's running.
                     Process *next_process_in_line = scheduler->peek_next_process();
-                    Event *running_event = get_current_running_process();
+                    Event *run_end_event = get_current_run_end_event();
                     bool queue_process = false;
 
                     // Check if anything's running.
-                    if (running_event == nullptr)
+                    if (run_end_event == nullptr)
                         queue_process = true;
 
-                    // Check if we can preempt.
-                    else{
-                        Process* running_process = running_event->get_process();
+                        // Check if we can preempt.
+                    else {
+                        Process *running_process = run_end_event->get_process();
+
+                        if (VERBOSE)
+                            printf("---> PRIO preemption %d by %d ? TS=%d now=%d)\n", running_process->PID,
+                                   curr_process->PID, run_end_event->get_time(), curr_time);
+
                         if (next_process_in_line->can_preempt &&
                             running_process->dynamic_priority <
-                            next_process_in_line->dynamic_priority){
+                            next_process_in_line->dynamic_priority && run_end_event->get_time() > curr_time) {
                             // Preempt the current running process if higher priority proc waiting.
-                            running_event->set_transition(RUNNING, READY);
-                            running_event->set_time(curr_time);
+                            run_end_event->set_transition(RUNNING, READY);
+
+                            // Since the running process is being preempted, we need to update processing time.
+                            running_process->remaining_time += run_end_event->get_time() - curr_time;
+                            running_process->burst += run_end_event->get_time() - curr_time;
+
+                            run_end_event->set_time(curr_time);
+
                             queue_process = true;
                         }
                     }
 
                     // If we're scheduling, pop the next process and schedule an event.
-                    if (queue_process){
+                    if (queue_process) {
                         next_process_in_line = scheduler->get_next_process();
                         auto *next_run_event = new Event(curr_time, next_process_in_line, READY, RUNNING);
                         put_event(next_run_event);
@@ -431,11 +460,10 @@ public:
                 case RUNNING: {
                     // Check if there's residual CPU burst time from prior preemption.
                     int cpu_burst;
-                    if(curr_process->burst == 0){
+                    if (curr_process->burst == 0) {
                         cpu_burst = myrandom(curr_process->CB);
                         curr_process->burst = cpu_burst;
-                    }
-                    else
+                    } else
                         cpu_burst = curr_process->burst;
 
                     int burst_candidates[3] = {cpu_burst, curr_process->remaining_time, quantum};
@@ -462,9 +490,12 @@ public:
                             new_event = new Event(burst_end_time, curr_process, RUNNING, READY);
                     }
 
-                        // Enqueue process termination event.
-                    else
+                    // Enqueue process termination event.
+                    else {
                         new_event = new Event(burst_end_time, curr_process, RUNNING, TERMINATED);
+//                        if (event_queue.empty() && curr_process->prioritised)
+//                            schedule_next_ready_process(scheduler, curr_time);
+                    }
 
                     put_event(new_event);
 
@@ -493,6 +524,9 @@ public:
                     if (VERBOSE)
                         printf("%d %d: RUNNG -> BLOCK ib=%d rem=%d\n", curr_time, curr_process->PID, burst_time,
                                curr_process->remaining_time);
+
+                    // Reset dynamic priority
+                    curr_process->dynamic_priority = curr_process->static_priority;
 
                     curr_process->io_time += burst_time;
                     auto *new_event = new Event(curr_end, curr_process, BLOCKED, READY);
