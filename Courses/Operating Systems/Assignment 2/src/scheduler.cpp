@@ -65,7 +65,7 @@ public:
 };
 
 
-typedef map<int, list<Process *>> mlqueue;
+typedef map<int, list<Process *> > mlqueue;
 
 
 class Scheduler {
@@ -384,8 +384,8 @@ class DiscreteEventSimulator {
     bool is_run_queued() {
         bool is_run_queued = false;
 
-        for(auto event : event_queue){
-            if (event->get_transition_states()[1] == RUNNING){
+        for (auto event: event_queue) {
+            if (event->get_transition_states()[1] == RUNNING) {
                 is_run_queued = true;
                 break;
             }
@@ -459,7 +459,7 @@ public:
                         }
                     }
 
-                    // Call scheduler if there's no more running processes or event triggers.
+                        // Call scheduler if there's no more running processes or event triggers.
                     else if (run_end_event == nullptr && !is_run_queued())
                         schedule_next_ready_process(scheduler, curr_time);
 
@@ -557,7 +557,7 @@ public:
                     if (VERBOSE)
                         printf("%d %d Done\n", curr_process->finishing_time, curr_process->PID);
 
-                    if(!is_run_queued())
+                    if (!is_run_queued())
                         schedule_next_ready_process(scheduler, curr_time);
                 }
             }
