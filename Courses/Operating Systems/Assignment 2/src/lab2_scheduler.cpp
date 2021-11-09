@@ -47,7 +47,7 @@ int myrandom(int burst) {
 
 class Process {
 public:
-    int AT, TC, CB, IO, PID, burst = 0, static_priority, dynamic_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
+    int AT, TC, CB, IO, PID, burst_left = 0, static_priority, dynamic_priority, remaining_time, finishing_time, io_time = 0, wait_time = 0, ready_stamp;
     bool prioritised = false, can_preempt = false;
     ProcessState state = CREATED;
 
@@ -187,7 +187,7 @@ public:
         quantum = quant_arg;
     }
 
-    void swap_queues(){
+    void swap_queues() {
         mlqueue temp;
         temp = run_queue;
         run_queue = expired_queue;
@@ -346,16 +346,14 @@ class DiscreteEventSimulator {
             if (event->get_time() < earliest_event->get_time())
                 earliest_event = event;
 
-            // Event order needs to consider state transition and priority as well.
+                // Event order needs to consider state transition and priority as well.
             else if (event->get_time() == earliest_event->get_time()) {
                 ProcessState earliest_state = earliest_event->get_transition_states()[1], event_state = event->get_transition_states()[1];
                 Process *earliest_process = earliest_event->get_process(), *event_process = event->get_process();
 
-                if (state_order[event_state] < state_order[earliest_state])
-                    earliest_event = event;
-
-                else if (earliest_state == RUNNING && event_state == RUNNING && event_process->can_preempt &&
-                         earliest_process->dynamic_priority < event_process->dynamic_priority)
+                if (state_order[event_state] < state_order[earliest_state] ||
+                    (earliest_state == RUNNING && event_state == RUNNING && event_process->can_preempt &&
+                     earliest_process->dynamic_priority < event_process->dynamic_priority))
                     earliest_event = event;
             }
         }
@@ -381,6 +379,19 @@ class DiscreteEventSimulator {
                 running_event = event;
         }
         return running_event;
+    }
+
+    bool is_run_queued() {
+        bool is_run_queued = false;
+
+        for(auto event : event_queue){
+            if (event->get_transition_states()[1] == RUNNING){
+                is_run_queued = true;
+                break;
+            }
+        }
+
+        return is_run_queued;
     }
 
 public:
@@ -420,12 +431,9 @@ public:
                     Event *run_end_event = get_current_run_end_event();
                     bool queue_process = false;
 
-                    // Check if anything's running.
-                    if (run_end_event == nullptr)
-                        queue_process = true;
-
+                    // Only check
+                    if (next_process_in_line != nullptr && run_end_event && transition_states[0] != READY) {
                         // Check if we can preempt.
-                    else {
                         Process *running_process = run_end_event->get_process();
 
                         if (VERBOSE)
@@ -439,38 +447,39 @@ public:
                             run_end_event->set_transition(RUNNING, READY);
 
                             // Since the running process is being preempted, we need to update processing time.
-                            running_process->remaining_time += run_end_event->get_time() - curr_time;
-                            running_process->burst += run_end_event->get_time() - curr_time;
+                            int time_adjustment = run_end_event->get_time() - curr_time;
+                            running_process->remaining_time += time_adjustment;
+                            running_process->burst_left += time_adjustment;
+                            cpu_runtime -= time_adjustment;
 
                             run_end_event->set_time(curr_time);
 
-                            queue_process = true;
+                            // Scheduler the higher priority process to run.
+                            schedule_next_ready_process(scheduler, curr_time);
                         }
                     }
 
-                    // If we're scheduling, pop the next process and schedule an event.
-                    if (queue_process) {
-                        next_process_in_line = scheduler->get_next_process();
-                        auto *next_run_event = new Event(curr_time, next_process_in_line, READY, RUNNING);
-                        put_event(next_run_event);
-                    }
+                    // Call scheduler if there's no more running processes or event triggers.
+                    else if (run_end_event == nullptr && !is_run_queued())
+                        schedule_next_ready_process(scheduler, curr_time);
+
                     break;
                 }
 
                 case RUNNING: {
-                    // Check if there's residual CPU burst time from prior preemption.
+                    // Check if there's residual CPU burst_left time from prior preemption.
                     int cpu_burst;
-                    if (curr_process->burst == 0) {
+                    if (curr_process->burst_left == 0) {
                         cpu_burst = myrandom(curr_process->CB);
-                        curr_process->burst = cpu_burst;
+                        curr_process->burst_left = cpu_burst;
                     } else
-                        cpu_burst = curr_process->burst;
+                        cpu_burst = curr_process->burst_left;
 
                     int burst_candidates[3] = {cpu_burst, curr_process->remaining_time, quantum};
 
-                    // Determine the shortest time period between the burst, quantum and remaining time.
+                    // Determine the shortest time period between the burst_left, quantum and remaining time.
                     int burst_time = *min_element(begin(burst_candidates), end(burst_candidates));
-                    curr_process->burst -= burst_time;
+                    curr_process->burst_left -= burst_time;
                     int burst_end_time = curr_time + burst_time;
 
                     if (VERBOSE)
@@ -490,12 +499,8 @@ public:
                             new_event = new Event(burst_end_time, curr_process, RUNNING, READY);
                     }
 
-                    // Enqueue process termination event.
-                    else {
-                        new_event = new Event(burst_end_time, curr_process, RUNNING, TERMINATED);
-//                        if (event_queue.empty() && curr_process->prioritised)
-//                            schedule_next_ready_process(scheduler, curr_time);
-                    }
+                        // Enqueue process termination event.
+                    else new_event = new Event(burst_end_time, curr_process, RUNNING, TERMINATED);
 
                     put_event(new_event);
 
@@ -532,7 +537,8 @@ public:
                     auto *new_event = new Event(curr_end, curr_process, BLOCKED, READY);
                     put_event(new_event);
 
-                    schedule_next_ready_process(scheduler, curr_time);
+                    if (!is_run_queued())
+                        schedule_next_ready_process(scheduler, curr_time);
                     break;
                 }
 
@@ -551,7 +557,8 @@ public:
                     if (VERBOSE)
                         printf("%d %d Done\n", curr_process->finishing_time, curr_process->PID);
 
-                    schedule_next_ready_process(scheduler, curr_time);
+                    if(!is_run_queued())
+                        schedule_next_ready_process(scheduler, curr_time);
                 }
             }
         }
