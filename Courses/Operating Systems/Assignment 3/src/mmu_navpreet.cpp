@@ -140,7 +140,7 @@ class Process{
 
 vector<Process*> processes;
 
-class Pstats{
+class ProcessStats{
   public:
   unsigned long long unmaps;
   unsigned long long maps;
@@ -152,7 +152,7 @@ class Pstats{
   unsigned long long segv;
   unsigned long long segprot;
 
-  Pstats(){
+  ProcessStats(){
     this->unmaps = 0;
     this->maps = 0;
     this->ins = 0;
@@ -166,7 +166,7 @@ class Pstats{
 
 };
 
-vector<Pstats*> pstatistics;
+vector<ProcessStats*> pstatistics;
 
 void print_pagetable(Process *p){
   cout<<"PT["<<p->proc_id<<"]: ";
@@ -211,13 +211,13 @@ class Instruction{
 vector<Instruction> instructions;
 unsigned long long inst_count = 0;
 
-class Pager{
+class Paging{
   public:
   int hand;
   virtual fte* select_victim_frame() = 0;
 };
 
-class FIFO : public Pager{
+class FIFO : public Paging{
   public:
 
   FIFO(){
@@ -234,7 +234,7 @@ class FIFO : public Pager{
 
 };
 
-class Random : public Pager{
+class Random : public Paging{
   public:
   
   Random(){
@@ -250,7 +250,7 @@ class Random : public Pager{
 
 };
 
-class Clock : public Pager{
+class Clock : public Paging{
   public:
 
   Clock(){
@@ -279,7 +279,7 @@ class Clock : public Pager{
 
 };
 
-class ESC : public Pager{
+class ESC : public Paging{
   public:
   unsigned long long last_inst;
   fte* Class[4];
@@ -344,7 +344,7 @@ class ESC : public Pager{
 
 };
 
-class Aging : public Pager{
+class Aging : public Paging{
   public:
 
   Aging(){
@@ -374,7 +374,7 @@ class Aging : public Pager{
 
 };
 
-class WorkingSet : public Pager{
+class WorkingSet : public Paging{
   public:
   unsigned long long time_last_used;
 
@@ -434,7 +434,7 @@ class WorkingSet : public Pager{
   
 };
 
-Pager *pager = NULL;
+Paging *pager = NULL;
 
 fte* allocate_frame_from_free_list(){
   if (framefreelist.size()==0) return NULL;
@@ -667,7 +667,7 @@ void summary(){
   if (S){
     vector<Process* >:: iterator it = processes.begin();
     Process* proc;
-    Pstats* pstats;
+    ProcessStats* pstats;
     while(it!=processes.end()){
       proc = *it;
       pstats = pstatistics[proc->proc_id];
@@ -763,7 +763,7 @@ int main(int argc, char **argv){
       }
       num_vmas = stoi(line);
       Process *p = new Process(i,num_vmas);
-      Pstats *pstats = new Pstats();
+      ProcessStats *pstats = new ProcessStats();
       for(int j=0;j<num_vmas;j++){
         getline(infile, line);
         istringstream ss(line);

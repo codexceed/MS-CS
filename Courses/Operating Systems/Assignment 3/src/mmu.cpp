@@ -51,17 +51,18 @@ void initRandNums() {
 }
 
 
-int myrandom(int burst) {
+int myrandom() {
+    int rand_val = rand_vals[(ofs) % rand_vals.size()] % MAX_FRAMES;
     ofs++;
-    return 1 + (rand_vals[(ofs - 1) % rand_vals.size()] % burst);
+    return rand_val;
 }
 
 
-class Pstats{
+class ProcessStats{
 public:
     unsigned long long unmaps, maps, ins, outs, fins, fouts, zeros, segv, segprot;
 
-    Pstats(){
+    ProcessStats(){
         unmaps = 0;
         maps = 0;
         ins = 0;
@@ -76,7 +77,7 @@ public:
 };
 
 
-vector<Pstats*> pstats;
+vector<ProcessStats*> process_stat_list;
 
 
 class PTE{
@@ -116,16 +117,6 @@ public:
 };
 
 
-class Pager{
-public:
-    int hand;
-    virtual FTE* select_victim_frame() = 0;
-};
-
-
-Pager *pager = nullptr;
-
-
 typedef vector<PTE> pages;
 
 
@@ -136,13 +127,13 @@ public:
     pages page_table;
 
     Process(int id, int num_vma)
-    :
-    id(id),
-    num_vma(num_vma){
-    for(int i=0;i<MAX_VPAGES;i++){
-        PTE page;
-        page_table.push_back(page);
-    }
+            :
+            id(id),
+            num_vma(num_vma){
+        for(int i=0;i<MAX_VPAGES;i++){
+            PTE page;
+            page_table.push_back(page);
+        }
     }
 
     void set_vma(int start_vpage, int end_vpage, int write_protected, int file_mapped){
@@ -153,6 +144,221 @@ public:
 
 
 vector<Process*> processes;
+
+
+class Paging{
+public:
+    int hand;
+    virtual FTE* select_victim_frame() = 0;
+};
+
+class FIFO : public Paging{
+public:
+
+    FIFO(){
+        this->hand = 0;
+    }
+
+    FTE* select_victim_frame(){
+        FTE* victim_frame = &frame_table[this->hand];
+        this->hand++;
+        if (this->hand == frame_table.size()) this->hand = 0;
+        victim_frame->victim = true;
+        return victim_frame;
+    }
+
+};
+
+class Random : public Paging{
+public:
+
+    Random(){
+        this->hand = 0;
+    }
+
+    FTE* select_victim_frame(){
+        int r = myrandom();
+        FTE* victim_frame = &frame_table[r];
+        victim_frame->victim = true;
+        return victim_frame;
+    }
+
+};
+
+class Clock : public Paging{
+public:
+
+    Clock(){
+        this->hand = 0;
+    }
+
+    FTE* select_victim_frame(){
+        FTE* victim_frame;
+        PTE* pg = &processes[frame_table[this->hand].proc_id]->page_table[frame_table[this->hand].vpage];
+        while (pg->referenced){
+            pg->referenced = 0;
+            this->hand++;
+            if (this->hand == frame_table.size()) this->hand = 0;
+            pg = &processes[frame_table[this->hand].proc_id]->page_table[frame_table[this->hand].vpage];
+        }
+        if (!pg->referenced){
+            victim_frame = &frame_table[this->hand];
+            this->hand++;
+            if (this->hand == frame_table.size()) this->hand = 0;
+            victim_frame->victim = true;
+
+        }
+        //else cout<<"error";
+        return victim_frame;
+    }
+
+};
+
+class ESC : public Paging{
+public:
+    unsigned long long last_inst;
+    FTE* Class[4];
+
+    ESC(){
+        this->hand = 0;
+        this->last_inst = 0;
+    }
+
+    FTE* select_victim_frame() override{
+        FTE* victim_frame = nullptr;
+
+        for(int i=0;i<4;i++) Class[i] = nullptr;
+        int classes = 0;
+
+        for(int cnt=0,i=this->hand;cnt<frame_table.size();cnt++,i++){
+            //frame_scanned = cnt+1;
+            if (i == frame_table.size()) i = 0;
+            PTE* pg = &processes[frame_table[i].proc_id]->page_table[frame_table[i].vpage];
+            int classidx = pg->referenced*2 + pg->modified;
+            if (Class[classidx] == nullptr){
+                Class[classidx] = &frame_table[i];
+                classes++;
+            }
+            if (classes == 4) break;
+        }
+
+        for(int i=0;i<4;i++){
+            if (Class[i] != nullptr){
+                victim_frame = Class[i];
+                this->hand = victim_frame->frame_no + 1;
+                if (this->hand == frame_table.size()) this->hand = 0;
+                victim_frame->victim = true;
+                break;
+            }
+        }
+
+        //if (victim_frame == NULL) cout<<"error\n";
+
+        if (inst_count - this->last_inst + 1 >= 50){
+            vector<FTE>:: iterator it = frame_table.begin();
+            while(it != frame_table.end()){
+                if ( (*it).proc_id != -1){
+                    processes[(*it).proc_id]->page_table[(*it).vpage].referenced = 0;
+                }
+                it++;
+            }
+            last_inst = inst_count + 1;
+        }
+        //cout<<lowest_class<<" "<<victim_frameno<<" "<<frame_scanned<<endl;
+        return victim_frame;
+    }
+
+};
+
+class Aging : public Paging{
+public:
+
+    Aging(){
+        this->hand = 0;
+    }
+
+    FTE* select_victim_frame(){
+        FTE* victim_frame = &frame_table[this->hand];
+        for(int cnt=0,i=this->hand;cnt<frame_table.size();cnt++,i++){
+            if (i == frame_table.size()) i = 0;
+            FTE *frame = &frame_table[i];
+            frame->age = frame->age >> 1;
+            if (processes[frame->proc_id]->page_table[frame->vpage].referenced == 1){
+                frame->age = (frame->age | 0x80000000);
+                processes[frame->proc_id]->page_table[frame->vpage].referenced = 0;
+            }
+            if (frame->age < victim_frame->age){
+                victim_frame = frame;
+            }
+        }
+
+        this->hand = victim_frame->frame_no + 1;
+        if (this->hand == frame_table.size()) this->hand = 0;
+        victim_frame->victim = true;
+        return victim_frame;
+    }
+
+};
+
+class WorkingSet : public Paging{
+public:
+    unsigned long long time_last_used;
+
+    WorkingSet(){
+        this->hand = 0;
+        this->time_last_used = 0;
+    }
+
+    FTE* select_victim_frame(){
+        this->time_last_used = 0;
+        //int fstart,fend;
+        //fstart = this->hand;
+        FTE* victim_frame = nullptr;
+
+        for(int cnt=0,i=this->hand;cnt<frame_table.size();cnt++,i++){
+            if (i == frame_table.size()) i = 0;
+            FTE* frame = &frame_table[i];
+            PTE* pg = &processes[frame->proc_id]->page_table[frame->vpage];
+
+            if (pg->referenced){
+                pg->referenced = 0;
+                frame->time_last_used = inst_count;
+            }
+            else{
+                if (inst_count - frame->time_last_used >= 50){
+                    victim_frame = frame;
+                    victim_frame->victim = true;
+                    this->hand = victim_frame->frame_no + 1;
+                    if (this->hand == frame_table.size()) this->hand = 0;
+                    break;
+                }
+                else{
+                    if (inst_count - frame->time_last_used > time_last_used){
+                        time_last_used = inst_count - frame->time_last_used;;
+                        victim_frame = frame;
+                        victim_frame->victim = true;
+                        this->hand = victim_frame->frame_no + 1;
+                        if (this->hand == frame_table.size()) this->hand = 0;
+                    }
+                }
+            }
+            //fend = i;
+
+        }
+        if (victim_frame == nullptr){
+            victim_frame = &frame_table[this->hand];
+            victim_frame->victim = true;
+            this->hand = victim_frame->frame_no + 1;
+            if (this->hand == frame_table.size()) this->hand = 0;
+        }
+        //cout<<fstart<<" "<<fend<<endl;
+        return victim_frame;
+    }
+
+
+};
+
+Paging *pager = nullptr;
 
 
 class Instruction{
@@ -214,7 +420,6 @@ FTE* get_frame(){
 
 
 void Simulation(){
-
     Process *curr_process;
 
     for(;inst_count<instructions.size();inst_count++){
@@ -261,13 +466,13 @@ void Simulation(){
                     if (O_flag){
                         cout<<" UNMAP "<<fpid<<":"<<fvpage<<endl;
                     }
-                    pstats[instr.proc_id]->unmaps++;
+                    process_stat_list[instr.proc_id]->unmaps++;
                     cost += 400;
 
                     //fout modified page
                     if (pg->modified){
                         if (pg->file_mapped){
-                            pstats[instr.proc_id]->fouts++;
+                            process_stat_list[instr.proc_id]->fouts++;
                             cost += 2400;
                             if (O_flag){
                                 cout<<" FOUT"<<endl;
@@ -308,7 +513,7 @@ void Simulation(){
 
 
             if (!page->valid){
-                pstats[curr_process->id]->segv++;
+                process_stat_list[curr_process->id]->segv++;
                 cost += 340;
                 if (O_flag){
                     cout<<" SEGV"<<endl;
@@ -322,7 +527,7 @@ void Simulation(){
                 //unmap
                 PTE* pg = &processes[newframe->proc_id]->page_table[newframe->vpage];
                 pg->present = 0;
-                pstats[newframe->proc_id]->unmaps++;
+                process_stat_list[newframe->proc_id]->unmaps++;
                 cost += 400;
                 if (O_flag){
                     cout<<" UNMAP "<<newframe->proc_id<<":"<<newframe->vpage<<endl;
@@ -332,14 +537,14 @@ void Simulation(){
                 if (pg->modified){
                     if (!pg->file_mapped){
                         pg->pagedout = 1;
-                        pstats[newframe->proc_id]->outs++;
+                        process_stat_list[newframe->proc_id]->outs++;
                         cost += 2700;
                         if (O_flag){
                             cout<<" OUT"<<endl;
                         }
                     }
                     else{
-                        pstats[newframe->proc_id]->fouts++;
+                        process_stat_list[newframe->proc_id]->fouts++;
                         cost += 2400;
                         if (O_flag){
                             cout<<" FOUT"<<endl;
@@ -355,14 +560,14 @@ void Simulation(){
             //Fill frame
             if (!page->file_mapped){
                 if (page->pagedout){
-                    pstats[curr_process->id]->ins++;
+                    process_stat_list[curr_process->id]->ins++;
                     cost += 3100;
                     if (O_flag){
                         cout<<" IN"<<endl;
                     }
                 }
                 else{
-                    pstats[curr_process->id]->zeros++;
+                    process_stat_list[curr_process->id]->zeros++;
                     cost += 140;
                     if (O_flag){
                         cout<<" ZERO"<<endl;
@@ -371,7 +576,7 @@ void Simulation(){
                 }
             }
             else{
-                pstats[curr_process->id]->fins++;
+                process_stat_list[curr_process->id]->fins++;
                 cost += 2800;
                 if (O_flag){
                     cout<<" FIN"<<endl;
@@ -383,7 +588,7 @@ void Simulation(){
             newframe->vpage = instr.vpage;
             newframe->age = 0;
             newframe->time_last_used = inst_count ;
-            pstats[curr_process->id]->maps++;
+            process_stat_list[curr_process->id]->maps++;
             page->present = 1;
             page->frame_count = newframe->frame_no;
 
@@ -398,7 +603,7 @@ void Simulation(){
 
         if(instr.inst_type=='w' && page->write_protect){
 
-            pstats[curr_process->id]->segprot++;
+            process_stat_list[curr_process->id]->segprot++;
             cost += 420;
             if (O_flag){
                 cout<<" SEGPROT"<<endl;
@@ -408,8 +613,6 @@ void Simulation(){
             page->modified = 1;
         }
     }
-
-
 }
 
 
@@ -449,6 +652,7 @@ void initializeSimulator(){
 
             num_vma = stoi(line);
             auto *process = new Process(i, num_vma);
+            auto *pstats = new ProcessStats();
             for(int j=0; j < num_vma; j++){
                 getline(input_file, line);
                 istringstream ss(line);
@@ -456,6 +660,7 @@ void initializeSimulator(){
                 process->set_vma(start_vpage, end_vpage, write_protected, file_mapped);
             }
             processes.push_back(process);
+            process_stat_list.push_back(pstats);
         }
 
         while(getline(input_file, line)){
@@ -483,7 +688,71 @@ void initializeSimulator(){
 }
 
 
-char parseArgs(int argc, char **argv) {
+void print_pagetable(Process *process){
+    cout<<"PT["<<process->id<<"]: ";
+    for(int i=0;i<MAX_VPAGES;i++){
+        if (process->page_table[i].present){
+            cout<<i<<":";
+            if (process->page_table[i].referenced) cout<<"R";
+            else cout<<"-";
+            if (process->page_table[i].modified) cout<<"M";
+            else cout<<"-";
+            if (process->page_table[i].pagedout) cout<<"S ";
+            else cout<<"- ";
+        }
+        else{
+            if (process->page_table[i].pagedout) cout<<"#";
+            else cout<<"*";
+            if (i != MAX_VPAGES - 1)
+                cout << " ";
+        }
+    }
+    cout<<endl;
+}
+
+
+void print_frametable(){
+    auto it = frame_table.begin();
+    cout<<"FT: ";
+    while(it!=frame_table.end()){
+        if ( (*it).proc_id == -1) cout<<"* ";
+        else cout<<(*it).proc_id<<":"<<(*it).vpage;
+        it++;
+        if (it != frame_table.end())
+            cout << " ";
+    }
+    cout<<endl;
+}
+
+
+void summary(){
+    if (P_flag){
+        auto it = processes.begin();
+        while(it!=processes.end()){
+            print_pagetable(*it);
+            it++;
+        }
+    }
+    if (F_flag){
+        print_frametable();
+    }
+    if (S_flag){
+        auto it = processes.begin();
+        Process* proc;
+        ProcessStats* pstats;
+        while(it!=processes.end()){
+            proc = *it;
+            pstats = process_stat_list[proc->id];
+            printf("PROC[%d]: U=%llu M=%llu I=%llu O=%llu FI=%llu FO=%llu Z=%llu SV=%llu SP=%llu\n",proc->id,pstats->unmaps,pstats->maps,
+                   pstats->ins, pstats->outs,pstats->fins, pstats->fouts, pstats->zeros,pstats->segv, pstats->segprot);
+            it++;
+        }
+        printf("TOTALCOST %llu %llu %llu %llu %lu\n",inst_count, ctx_switches, process_exits, cost, sizeof(PTE));
+    }
+}
+
+
+void parseArgs(int argc, char **argv) {
     /*
      * Parse commandline arguments.
      */
@@ -505,7 +774,6 @@ char parseArgs(int argc, char **argv) {
                 sscanf(optarg, "%d", &MAX_FRAMES);
                 break;
             case 'a':
-                cout << optarg << endl;
                 sscanf(optarg, "%c", &algo);
                 break;
             case 'x':
@@ -539,39 +807,39 @@ char parseArgs(int argc, char **argv) {
     INPUT_FILE_PATH = argv[optind];
     RAND_FILE_PATH = argv[++optind];
 
-    cout << INPUT_FILE_PATH << RAND_FILE_PATH << endl;
+//    cout << INPUT_FILE_PATH << RAND_FILE_PATH << endl;
 
-    return algo;
+    switch(algo){
+        case 'f':
+            pager = new FIFO();
+            break;
+        case 'r':
+            pager = new Random();
+            break;
+        case 'c':
+            pager = new Clock();
+            break;
+        case 'e':
+            pager = new ESC();
+            break;
+        case 'a':
+            pager = new Aging();
+            break;
+        case 'w':
+            pager = new WorkingSet();
+            break;
+        default:
+            break;
+    }
 }
 
 
 int main(int argc, char **argv) {
-    char algo = parseArgs(argc, argv);
+    parseArgs(argc, argv);
 
     // Initialize the simulator
     initRandNums();
     initializeSimulator();
-
-//    switch(algo){
-//        case 'f':
-//            pager = new FIFO();
-//            break;
-//        case 'r':
-//            pager = new Random();
-//            break;
-//        case 'c':
-//            pager = new Clock();
-//            break;
-//        case 'e':
-//            pager = new ESC();
-//            break;
-//        case 'a':
-//            pager = new Aging();
-//            break;
-//        case 'w':
-//            pager = new WorkingSet();
-//            break;
-//        default:
-//            break;
-//    }
+    Simulation();
+    summary();
 }
