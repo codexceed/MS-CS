@@ -4,6 +4,8 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <deque>
+#include <cstring>
 
 using namespace std;
 
@@ -100,6 +102,17 @@ public:
         file_mapped = 0;
     }
 
+    void purge_entry() {
+        frame_count = 0;
+        present = 0;
+        referenced = 0;
+        modified = 0;
+        write_protect = 0;
+        pagedout = 0;
+        valid = 0;
+        file_mapped = 0;
+    }
+
 };
 
 
@@ -124,7 +137,7 @@ public:
     vector<VMA *> vmas;
     pages page_table;
 
-    Process(int id, int num_vma)
+    Process(int id)
             :
             id(id) {
         for (int i = 0; i < MAX_VPAGES; i++) {
@@ -154,13 +167,13 @@ class FIFO : public Paging {
 public:
 
     FIFO() {
-        this->hand = 0;
+        hand = 0;
     }
 
     FTE *select_victim_frame() override {
-        FTE *victim_frame = &frame_table[this->hand];
-        this->hand++;
-        if (this->hand == frame_table.size()) this->hand = 0;
+        FTE *victim_frame = &frame_table[hand];
+        hand++;
+        if (hand == frame_table.size()) hand = 0;
         victim_frame->victim = true;
         return victim_frame;
     }
@@ -171,7 +184,7 @@ class Random : public Paging {
 public:
 
     Random() {
-        this->hand = 0;
+        hand = 0;
     }
 
     FTE *select_victim_frame() override {
@@ -187,22 +200,22 @@ class Clock : public Paging {
 public:
 
     Clock() {
-        this->hand = 0;
+        hand = 0;
     }
 
     FTE *select_victim_frame() override {
         FTE *victim_frame = nullptr;
-        PTE *pg = &processes[frame_table[this->hand].proc_id]->page_table[frame_table[this->hand].vpage];
+        PTE *pg = &processes[frame_table[hand].proc_id]->page_table[frame_table[hand].vpage];
         while (pg->referenced) {
             pg->referenced = 0;
-            this->hand++;
-            if (this->hand == frame_table.size()) this->hand = 0;
-            pg = &processes[frame_table[this->hand].proc_id]->page_table[frame_table[this->hand].vpage];
+            hand++;
+            if (hand == frame_table.size()) hand = 0;
+            pg = &processes[frame_table[hand].proc_id]->page_table[frame_table[hand].vpage];
         }
         if (!pg->referenced) {
-            victim_frame = &frame_table[this->hand];
-            this->hand++;
-            if (this->hand == frame_table.size()) this->hand = 0;
+            victim_frame = &frame_table[hand];
+            hand++;
+            if (hand == frame_table.size()) hand = 0;
             victim_frame->victim = true;
 
         }
@@ -217,17 +230,17 @@ public:
     FTE *Class[4]{};
 
     ESC() {
-        this->hand = 0;
-        this->last_inst = 0;
+        hand = 0;
+        last_inst = 0;
     }
 
     FTE *select_victim_frame() override {
         FTE *victim_frame = nullptr;
 
-        for (auto & Clas : Class) Clas = nullptr;
+        for (auto &Clas: Class) Clas = nullptr;
         int classes = 0;
 
-        for (int cnt = 0, i = this->hand; cnt < frame_table.size(); cnt++, i++) {
+        for (int cnt = 0, i = hand; cnt < frame_table.size(); cnt++, i++) {
             //frame_scanned = cnt+1;
             if (i == frame_table.size()) i = 0;
             PTE *pg = &processes[frame_table[i].proc_id]->page_table[frame_table[i].vpage];
@@ -239,11 +252,11 @@ public:
             if (classes == 4) break;
         }
 
-        for (auto & Clas : Class) {
+        for (auto &Clas: Class) {
             if (Clas != nullptr) {
                 victim_frame = Clas;
-                this->hand = victim_frame->frame_no + 1;
-                if (this->hand == frame_table.size()) this->hand = 0;
+                hand = victim_frame->frame_no + 1;
+                if (hand == frame_table.size()) hand = 0;
                 victim_frame->victim = true;
                 break;
             }
@@ -251,7 +264,7 @@ public:
 
         //if (victim_frame == NULL) cout<<"error\n";
 
-        if (inst_count - this->last_inst + 1 >= 50) {
+        if (inst_count - last_inst + 1 >= 50) {
             auto it = frame_table.begin();
             while (it != frame_table.end()) {
                 if ((*it).proc_id != -1) {
@@ -261,7 +274,6 @@ public:
             }
             last_inst = inst_count + 1;
         }
-        //cout<<lowest_class<<" "<<victim_frameno<<" "<<frame_scanned<<endl;
         return victim_frame;
     }
 
@@ -271,12 +283,12 @@ class Aging : public Paging {
 public:
 
     Aging() {
-        this->hand = 0;
+        hand = 0;
     }
 
     FTE *select_victim_frame() override {
-        FTE *victim_frame = &frame_table[this->hand];
-        for (int cnt = 0, i = this->hand; cnt < frame_table.size(); cnt++, i++) {
+        FTE *victim_frame = &frame_table[hand];
+        for (int cnt = 0, i = hand; cnt < frame_table.size(); cnt++, i++) {
             if (i == frame_table.size()) i = 0;
             FTE *frame = &frame_table[i];
             frame->age = frame->age >> 1;
@@ -289,32 +301,31 @@ public:
             }
         }
 
-        this->hand = victim_frame->frame_no + 1;
-        if (this->hand == frame_table.size()) this->hand = 0;
+        hand = victim_frame->frame_no + 1;
+        if (hand == frame_table.size()) hand = 0;
         victim_frame->victim = true;
         return victim_frame;
     }
 
 };
 
+
 class WorkingSet : public Paging {
 public:
     unsigned long long time_last_used;
 
     WorkingSet() {
-        this->hand = 0;
-        this->time_last_used = 0;
+        hand = 0;
+        time_last_used = 0;
     }
 
     FTE *select_victim_frame() override {
-        this->time_last_used = 0;
-        //int fstart,fend;
-        //fstart = this->hand;
+        time_last_used = 0;
         FTE *victim_frame = nullptr;
 
-        for (int cnt = 0, i = this->hand; cnt < frame_table.size(); cnt++, i++) {
-            if (i == frame_table.size()) i = 0;
-            FTE *frame = &frame_table[i];
+        for (int i = 0, j = hand; i < frame_table.size(); i++, j++) {
+            j = j % frame_table.size();
+            FTE *frame = &frame_table[j];
             PTE *pg = &processes[frame->proc_id]->page_table[frame->vpage];
 
             if (pg->referenced) {
@@ -324,33 +335,26 @@ public:
                 if (inst_count - frame->time_last_used >= 50) {
                     victim_frame = frame;
                     victim_frame->victim = true;
-                    this->hand = victim_frame->frame_no + 1;
-                    if (this->hand == frame_table.size()) this->hand = 0;
+                    hand = (victim_frame->frame_no + 1) % frame_table.size();
                     break;
                 } else {
                     if (inst_count - frame->time_last_used > time_last_used) {
                         time_last_used = inst_count - frame->time_last_used;;
                         victim_frame = frame;
                         victim_frame->victim = true;
-                        this->hand = victim_frame->frame_no + 1;
-                        if (this->hand == frame_table.size()) this->hand = 0;
+                        hand = (victim_frame->frame_no + 1) % frame_table.size();
                     }
                 }
             }
-            //fend = i;
 
         }
         if (victim_frame == nullptr) {
-            victim_frame = &frame_table[this->hand];
+            victim_frame = &frame_table[hand];
             victim_frame->victim = true;
-            this->hand = victim_frame->frame_no + 1;
-            if (this->hand == frame_table.size()) this->hand = 0;
+            hand = (victim_frame->frame_no + 1) % frame_table.size();
         }
-        //cout<<fstart<<" "<<fend<<endl;
         return victim_frame;
     }
-
-
 };
 
 Paging *pager = nullptr;
@@ -358,43 +362,18 @@ Paging *pager = nullptr;
 
 class Instruction {
 public:
-
     char inst_type;
     int proc_id, vpage;
 
-    Instruction(char inst_type, int num) {
-        this->inst_type = inst_type;
-        if (inst_type == 'c' || inst_type == 'e') {
-            this->proc_id = num;
-        } else {
-            this->vpage = num;
-        }
-
+    Instruction(char inst_type, int num) :
+            inst_type(inst_type) {
+        if (inst_type == 'c' || inst_type == 'e') proc_id = num;
+        else vpage = num;
     }
 };
 
 
 vector<Instruction> instructions;
-
-
-//DiscreteEventSimulator initializeSimulator() {
-//    DiscreteEventSimulator simulator;
-//    ifstream input_file(INPUT_FILE_PATH);
-//
-//    if (!input_file) {
-//        cout << "File at " << INPUT_FILE_PATH << " not found." << endl;
-//        exit(1);
-//    }
-//
-//    while (input_file >> AT >> TC >> CB >> IO) {
-//        auto *process = new Process(AT, TC, CB, IO, PID);
-//        auto *event = new Event(AT, process, CREATED, READY);
-//        simulator.put_event(event);
-//        PID++;
-//    }
-//
-//    return simulator;
-//}
 
 
 FTE *allocate_frame_from_free_list() {
@@ -413,7 +392,7 @@ FTE *get_frame() {
 }
 
 
-void print_instruction(Instruction instruction){
+void print_instruction(Instruction instruction) {
     int idx = (instruction.inst_type == 'c' || instruction.inst_type == 'e') ? instruction.proc_id : instruction.vpage;
     cout << inst_count << ": ==> " << instruction.inst_type << " " << idx << endl;
 }
@@ -423,7 +402,6 @@ void Simulation() {
     /*
      * Simulate the instruction execution.
      */
-
     Process *curr_process;
 
     for (; inst_count < instructions.size(); inst_count++) {
@@ -437,175 +415,153 @@ void Simulation() {
             ctx_switches++;
             curr_process = processes[instr.proc_id];
             cost += 130;
-            continue;
         }
 
-        // Exiting process
+            // Exiting process
         else if (instr.inst_type == 'e') {
             process_exits++;
             cost += 1250;
 
             cout << "EXIT current process " << instr.proc_id << endl;
-            auto it = processes[instr.proc_id]->page_table.begin();
-            while (it != processes[instr.proc_id]->page_table.end()) {
+            for (auto it = processes[instr.proc_id]->page_table.begin();
+                 it != processes[instr.proc_id]->page_table.end(); it++) {
+                // Get reference to update object attributes
                 PTE *pg = &(*it);
-                //unmap page
+
+                // Unmap
                 if (pg->present) {
                     FTE *frame = &frame_table[pg->frame_count];
-                    int fpid = frame->proc_id;
-                    int fvpage = frame->vpage;
+                    int pid = frame->proc_id, vpage = frame->vpage;
+
                     frame->proc_id = -1;
                     frame->vpage = -1;
                     frame->victim = false;
                     frame->age = 0;
                     frame->time_last_used = 0;
                     framefreelist.push_back(frame);
+
                     if (O_flag) {
-                        cout << " UNMAP " << fpid << ":" << fvpage << endl;
+                        cout << " UNMAP " << pid << ":" << vpage << endl;
                     }
                     process_stat_list[instr.proc_id]->unmaps++;
                     cost += 400;
 
-                    //fout modified page
-                    if (pg->modified) {
-                        if (pg->file_mapped) {
-                            process_stat_list[instr.proc_id]->fouts++;
-                            cost += 2400;
-                            if (O_flag) {
-                                cout << " FOUT" << endl;
-                            }
-                        }
-                    }
-                }
-                pg->frame_count = 0;
-                pg->present = 0;
-                pg->referenced = 0;
-                pg->modified = 0;
-                pg->write_protect = 0;
-                pg->pagedout = 0;
-                pg->valid = 0;
-                pg->file_mapped = 0;
-                it++;
-            }
-            continue;
-
-        }
-
-        else
-
-        //read and write
-        cost++;
-        PTE *page = &curr_process->page_table[instr.vpage];
-
-        if (!page->present) {
-
-            if (!page->valid) {
-                for (auto &vma: curr_process->vmas) {
-                    if (instr.vpage >= vma->start_vpage && instr.vpage <= vma->end_vpage) {
-                        page->valid = 1;
-                        page->file_mapped = vma->file_mapped;
-                        page->write_protect = vma->write_protected;
-                        break;
-                    }
-                }
-            }
-
-
-            if (!page->valid) {
-                process_stat_list[curr_process->id]->segv++;
-                cost += 340;
-                if (O_flag) {
-                    cout << " SEGV" << endl;
-                }
-                continue;
-            }
-
-            FTE *newframe = get_frame();
-
-            if (newframe->victim) {
-                //unmap
-                PTE *pg = &processes[newframe->proc_id]->page_table[newframe->vpage];
-                pg->present = 0;
-                process_stat_list[newframe->proc_id]->unmaps++;
-                cost += 400;
-                if (O_flag) {
-                    cout << " UNMAP " << newframe->proc_id << ":" << newframe->vpage << endl;
-                }
-
-                //Save frame to disk
-                if (pg->modified) {
-                    if (!pg->file_mapped) {
-                        pg->pagedout = 1;
-                        process_stat_list[newframe->proc_id]->outs++;
-                        cost += 2700;
-                        if (O_flag) {
-                            cout << " OUT" << endl;
-                        }
-                    } else {
-                        process_stat_list[newframe->proc_id]->fouts++;
+                    // Print modified page
+                    if (pg->modified && pg->file_mapped) {
+                        process_stat_list[instr.proc_id]->fouts++;
                         cost += 2400;
+
                         if (O_flag) {
                             cout << " FOUT" << endl;
                         }
                     }
-                    pg->modified = 0;
-                    pg->frame_count = 0;
-
                 }
-
+                pg->purge_entry();
             }
-
-            //Fill frame
-            if (!page->file_mapped) {
-                if (page->pagedout) {
-                    process_stat_list[curr_process->id]->ins++;
-                    cost += 3100;
-                    if (O_flag) {
-                        cout << " IN" << endl;
-                    }
-                } else {
-                    process_stat_list[curr_process->id]->zeros++;
-                    cost += 140;
-                    if (O_flag) {
-                        cout << " ZERO" << endl;
-                    }
-
-                }
-            } else {
-                process_stat_list[curr_process->id]->fins++;
-                cost += 2800;
-                if (O_flag) {
-                    cout << " FIN" << endl;
-                }
-            }
-
-            //map
-            newframe->proc_id = curr_process->id;
-            newframe->vpage = instr.vpage;
-            newframe->age = 0;
-            newframe->time_last_used = inst_count;
-            process_stat_list[curr_process->id]->maps++;
-            page->present = 1;
-            page->frame_count = newframe->frame_no;
-
-            cost += 300;
-            if (O_flag) {
-                cout << " MAP " << newframe->frame_no << endl;
-            }
-
         }
 
-        page->referenced = 1;
+            //read and write
+        else {
+            cost++;
+            PTE *page = &curr_process->page_table[instr.vpage];
 
-        if (instr.inst_type == 'w' && page->write_protect) {
+            if (!page->present) {
+                if (!page->valid) {
+                    for (auto &vma: curr_process->vmas) {
+                        if (instr.vpage >= vma->start_vpage && instr.vpage <= vma->end_vpage) {
+                            page->valid = 1;
+                            page->file_mapped = vma->file_mapped;
+                            page->write_protect = vma->write_protected;
+                            break;
+                        }
+                    }
 
-            process_stat_list[curr_process->id]->segprot++;
-            cost += 420;
-            if (O_flag) {
-                cout << " SEGPROT" << endl;
+                    if (!page->valid) {
+                        process_stat_list[curr_process->id]->segv++;
+                        cost += 340;
+
+                        if (O_flag) {
+                            cout << " SEGV" << endl;
+                        }
+                        continue;
+                    }
+                }
+
+                FTE *newframe = get_frame();
+                if (newframe->victim) {
+                    // Unmap
+                    PTE *pg = &processes[newframe->proc_id]->page_table[newframe->vpage];
+                    pg->present = 0;
+
+                    process_stat_list[newframe->proc_id]->unmaps++;
+                    cost += 400;
+
+                    if (O_flag) cout << " UNMAP " << newframe->proc_id << ":" << newframe->vpage << endl;
+
+                    // Save frame to disk
+                    if (pg->modified) {
+                        if (!pg->file_mapped) {
+                            pg->pagedout = 1;
+
+                            process_stat_list[newframe->proc_id]->outs++;
+                            cost += 2700;
+
+                            if (O_flag) cout << " OUT" << endl;
+                        } else {
+                            process_stat_list[newframe->proc_id]->fouts++;
+                            cost += 2400;
+
+                            if (O_flag) cout << " FOUT" << endl;
+                        }
+                        pg->modified = 0;
+                        pg->frame_count = 0;
+
+                    }
+
+                }
+
+                // Fill frame
+                if (!page->file_mapped) {
+                    if (page->pagedout) {
+                        process_stat_list[curr_process->id]->ins++;
+                        cost += 3100;
+
+                        if (O_flag) cout << " IN" << endl;
+                    } else {
+                        process_stat_list[curr_process->id]->zeros++;
+                        cost += 140;
+
+                        if (O_flag) cout << " ZERO" << endl;
+                    }
+                } else {
+                    process_stat_list[curr_process->id]->fins++;
+                    cost += 2800;
+
+                    if (O_flag) cout << " FIN" << endl;
+                }
+
+                // Map page to frame.
+                newframe->proc_id = curr_process->id;
+                newframe->vpage = instr.vpage;
+                newframe->age = 0;
+                newframe->time_last_used = inst_count;
+                process_stat_list[curr_process->id]->maps++;
+                page->present = 1;
+                page->frame_count = newframe->frame_no;
+
+                cost += 300;
+                if (O_flag) cout << " MAP " << newframe->frame_no << endl;
+
             }
-        } else if (instr.inst_type == 'w' && !page->write_protect) {
-            page->modified = 1;
+
+            page->referenced = 1;
+
+            if (instr.inst_type == 'w' && page->write_protect) {
+                process_stat_list[curr_process->id]->segprot++;
+                cost += 420;
+
+                if (O_flag) cout << " SEGPROT" << endl;
+            } else if (instr.inst_type == 'w' && !page->write_protect) page->modified = 1;
         }
     }
 }
@@ -646,7 +602,7 @@ void initializeSimulator() {
             }
 
             num_vma = stoi(line);
-            auto *process = new Process(i, num_vma);
+            auto *process = new Process(i);
             auto *pstats = new ProcessStats();
             for (int j = 0; j < num_vma; j++) {
                 getline(input_file, line);
@@ -712,7 +668,7 @@ void print_frametable() {
      * Print final states for plain table entries.
      */
     cout << "FT: ";
-    for(auto frame_it = frame_table.begin() ; frame_it != frame_table.end() ; frame_it++) {
+    for (auto frame_it = frame_table.begin(); frame_it != frame_table.end(); frame_it++) {
         FTE frame = *frame_it;
 
         if (frame.proc_id == -1) cout << "*";
@@ -731,7 +687,7 @@ void print_summary() {
      * Print aggregated statistics.
      */
     ProcessStats *pstats;
-    for(auto & process : processes) {
+    for (auto &process: processes) {
         int process_id = process->id;
         pstats = process_stat_list[process_id];
 
@@ -746,7 +702,7 @@ void print_summary() {
 
 void summary() {
     if (P_flag) {
-        for(auto & process : processes) print_pagetable(process);
+        for (auto &process: processes) print_pagetable(process);
     }
     if (F_flag) {
         print_frametable();
