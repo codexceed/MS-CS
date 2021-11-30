@@ -697,8 +697,10 @@ void print_pagetable(Process *process){
             else cout<<"-";
             if (process->page_table[i].modified) cout<<"M";
             else cout<<"-";
-            if (process->page_table[i].pagedout) cout<<"S ";
-            else cout<<"- ";
+            if (process->page_table[i].pagedout) cout<<"S";
+            else cout<<"-";
+            if (i != MAX_VPAGES - 1)
+                cout << " ";
         }
         else{
             if (process->page_table[i].pagedout) cout<<"#";
@@ -715,7 +717,7 @@ void print_frametable(){
     auto it = frame_table.begin();
     cout<<"FT: ";
     while(it!=frame_table.end()){
-        if ( (*it).proc_id == -1) cout<<"* ";
+        if ( (*it).proc_id == -1) cout<<"*";
         else cout<<(*it).proc_id<<":"<<(*it).vpage;
         it++;
         if (it != frame_table.end())
