@@ -30,6 +30,56 @@ public:
 };
 
 
+class PTE {
+public:
+    unsigned int frame_count: 7;
+    unsigned int referenced: 1;
+    unsigned int file_mapped: 1;
+    unsigned int write_protect: 1;
+    unsigned int pagedout: 1;
+    unsigned int present: 1;
+    unsigned int modified: 1;
+    unsigned int valid: 1;
+
+    PTE() {
+        write_protect = 0;
+        referenced = 0;
+        valid = 0;
+        modified = 0;
+        present = 0;
+        pagedout = 0;
+        frame_count = 0;
+        file_mapped = 0;
+    }
+
+    void purge_entry() {
+        write_protect = 0;
+        referenced = 0;
+        valid = 0;
+        modified = 0;
+        present = 0;
+        pagedout = 0;
+        frame_count = 0;
+        file_mapped = 0;
+    }
+
+};
+
+typedef vector<PTE> pages;
+
+
+class VMA {
+public:
+    int start_vpage, end_vpage, write_protected, file_mapped;
+
+    VMA(int start_vpage, int end_vpage, int write_protected, int file_mapped) :
+            start_vpage(start_vpage),
+            end_vpage(end_vpage),
+            write_protected(write_protected),
+            file_mapped(file_mapped) {}
+};
+
+
 // Globals
 bool O_flag = false, P_flag = false, F_flag = false, S_flag = false, DEBUG = false;
 int MAX_FRAMES = 128, ofs = 0, MAX_VPAGES = 64;
@@ -76,59 +126,7 @@ public:
 
 };
 
-
 vector<ProcessStats *> process_stat_list;
-
-
-class PTE {
-public:
-    unsigned int frame_count: 7;
-    unsigned int present: 1;
-    unsigned int referenced: 1;
-    unsigned int modified: 1;
-    unsigned int write_protect: 1;
-    unsigned int pagedout: 1;
-    unsigned int valid: 1;
-    unsigned int file_mapped: 1;
-
-    PTE() {
-        frame_count = 0;
-        present = 0;
-        referenced = 0;
-        modified = 0;
-        write_protect = 0;
-        pagedout = 0;
-        valid = 0;
-        file_mapped = 0;
-    }
-
-    void purge_entry() {
-        frame_count = 0;
-        present = 0;
-        referenced = 0;
-        modified = 0;
-        write_protect = 0;
-        pagedout = 0;
-        valid = 0;
-        file_mapped = 0;
-    }
-
-};
-
-
-class VMA {
-public:
-    int start_vpage, end_vpage, write_protected, file_mapped;
-
-    VMA(int start_vpage, int end_vpage, int write_protected, int file_mapped) :
-            start_vpage(start_vpage),
-            end_vpage(end_vpage),
-            write_protected(write_protected),
-            file_mapped(file_mapped) {}
-};
-
-
-typedef vector<PTE> pages;
 
 
 class Process {
@@ -137,7 +135,7 @@ public:
     vector<VMA *> vmas;
     pages page_table;
 
-    Process(int id)
+    explicit Process(int id)
             :
             id(id) {
         for (int i = 0; i < MAX_VPAGES; i++) {
@@ -152,18 +150,17 @@ public:
     }
 };
 
-
 vector<Process *> processes;
 
 
-class Paging {
+class Pager {
 public:
     int hand{};
 
     virtual FTE *select_victim_frame() = 0;
 };
 
-class FIFO : public Paging {
+class FIFO : public Pager {
 public:
 
     FIFO() {
@@ -172,31 +169,14 @@ public:
 
     FTE *select_victim_frame() override {
         FTE *victim_frame = &frame_table[hand];
-        hand++;
-        if (hand == frame_table.size()) hand = 0;
         victim_frame->victim = true;
+        hand = (hand + 1) % frame_table.size();
         return victim_frame;
     }
 
 };
 
-class Random : public Paging {
-public:
-
-    Random() {
-        hand = 0;
-    }
-
-    FTE *select_victim_frame() override {
-        int r = myrandom();
-        FTE *victim_frame = &frame_table[r];
-        victim_frame->victim = true;
-        return victim_frame;
-    }
-
-};
-
-class Clock : public Paging {
+class Clock : public Pager {
 public:
 
     Clock() {
@@ -214,9 +194,8 @@ public:
         }
         if (!pg->referenced) {
             victim_frame = &frame_table[hand];
-            hand++;
-            if (hand == frame_table.size()) hand = 0;
             victim_frame->victim = true;
+            hand = (hand + 1) % frame_table.size();
 
         }
         return victim_frame;
@@ -224,10 +203,10 @@ public:
 
 };
 
-class ESC : public Paging {
+class ESC : public Pager {
 public:
     unsigned long long last_inst;
-    FTE *Class[4]{};
+    FTE *frame_classes[4]{};
 
     ESC() {
         hand = 0;
@@ -237,26 +216,26 @@ public:
     FTE *select_victim_frame() override {
         FTE *victim_frame = nullptr;
 
-        for (auto &Clas: Class) Clas = nullptr;
+        for (auto &Clas: frame_classes) Clas = nullptr;
         int classes = 0;
 
-        for (int cnt = 0, i = hand; cnt < frame_table.size(); cnt++, i++) {
-            //frame_scanned = cnt+1;
-            if (i == frame_table.size()) i = 0;
-            PTE *pg = &processes[frame_table[i].proc_id]->page_table[frame_table[i].vpage];
-            int classidx = pg->referenced * 2 + pg->modified;
-            if (Class[classidx] == nullptr) {
-                Class[classidx] = &frame_table[i];
+        for (int i = 0, j = hand; i < frame_table.size(); i++, j++) {
+            j = j % frame_table.size();
+            PTE *page = &processes[frame_table[j].proc_id]->page_table[frame_table[j].vpage];
+            int classidx = page->referenced * 2 + page->modified;
+
+            if (frame_classes[classidx] == nullptr) {
+                frame_classes[classidx] = &frame_table[j];
                 classes++;
             }
+
             if (classes == 4) break;
         }
 
-        for (auto &Clas: Class) {
-            if (Clas != nullptr) {
-                victim_frame = Clas;
-                hand = victim_frame->frame_no + 1;
-                if (hand == frame_table.size()) hand = 0;
+        for (auto &f_class: frame_classes) {
+            if (f_class != nullptr) {
+                victim_frame = f_class;
+                hand = (victim_frame->frame_no + 1) % frame_table.size();
                 victim_frame->victim = true;
                 break;
             }
@@ -279,7 +258,7 @@ public:
 
 };
 
-class Aging : public Paging {
+class Aging : public Pager {
 public:
 
     Aging() {
@@ -288,29 +267,29 @@ public:
 
     FTE *select_victim_frame() override {
         FTE *victim_frame = &frame_table[hand];
-        for (int cnt = 0, i = hand; cnt < frame_table.size(); cnt++, i++) {
-            if (i == frame_table.size()) i = 0;
-            FTE *frame = &frame_table[i];
+        for (int i = 0, j = hand; i < frame_table.size(); i++, j++) {
+            j = j % frame_table.size();
+            FTE *frame = &frame_table[j];
             frame->age = frame->age >> 1;
+
             if (processes[frame->proc_id]->page_table[frame->vpage].referenced == 1) {
                 frame->age = (frame->age | 0x80000000);
                 processes[frame->proc_id]->page_table[frame->vpage].referenced = 0;
             }
+
             if (frame->age < victim_frame->age) {
                 victim_frame = frame;
             }
         }
 
-        hand = victim_frame->frame_no + 1;
-        if (hand == frame_table.size()) hand = 0;
+        hand = (victim_frame->frame_no + 1) % frame_table.size();
         victim_frame->victim = true;
         return victim_frame;
     }
 
 };
 
-
-class WorkingSet : public Paging {
+class WorkingSet : public Pager {
 public:
     unsigned long long time_last_used;
 
@@ -357,7 +336,23 @@ public:
     }
 };
 
-Paging *pager = nullptr;
+class Random : public Pager {
+public:
+
+    Random() {
+        hand = 0;
+    }
+
+    FTE *select_victim_frame() override {
+        int r = myrandom();
+        FTE *victim_frame = &frame_table[r];
+        victim_frame->victim = true;
+        return victim_frame;
+    }
+
+};
+
+Pager *pager = nullptr;
 
 
 class Instruction {
@@ -371,7 +366,6 @@ public:
         else vpage = num;
     }
 };
-
 
 vector<Instruction> instructions;
 
