@@ -288,7 +288,7 @@ public:
         }
 
         printf("SUM: %d %d %.2lf %.2lf %d\n",
-               time, scheduler->total_movement, scheduler->total_turnaround / io_idx, scheduler->total_wait / io_idx,
+               time, scheduler->total_movement, (float) scheduler->total_turnaround / (float) io_idx, (float) scheduler->total_wait / (float) io_idx,
                scheduler->max_wait);
 
     }
