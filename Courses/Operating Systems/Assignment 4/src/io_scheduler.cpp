@@ -20,7 +20,7 @@ string INPUT_FILE_PATH;
 
 class Request {
 public:
-    int arr_time, start_time, end_time, track, id;
+    int arr_time, start_time{}, end_time{}, track, id{};
 
     Request(int arr_time, int track)
             : arr_time(arr_time), track(track) {};
@@ -34,6 +34,20 @@ public:
     int curr_track = 0, scan_incr = 1, total_movement = 0, total_turnaround = 0, total_wait = 0, max_wait = 0;
     requests_t io_queue, disk;
     requests_t::iterator head = disk.begin();
+
+    int disk_dist_by_id(int id) {
+        auto disk_it = disk.begin();
+        for (; disk_it != disk.end(); disk_it++)
+            if ((*disk_it)->id == id)
+                break;
+
+        if (disk_it == disk.end()) {
+            cout << "Invalid Distance: ID not found on disk.";
+            exit(1);
+        }
+
+        return distance(head, disk_it);
+    }
 
     void set_head_to_id(requests_t *active_disk, int id) {
         // Adjust head after new mapping.
@@ -87,7 +101,7 @@ public:
             return nullptr;
 
         if (DEBUG) {
-            if (head < disk.begin() || head >= disk.end()) {
+            if (head >= disk.begin() && head < disk.end()) {
                 cout << "Current head ID: " << (*head)->id << endl;
             }
         }
@@ -96,9 +110,9 @@ public:
         auto seek_target = head + scan_incr;
 
         if (DEBUG) {
-            cout << "IO IDs on disk: ";
+            cout << "IO ID, Track" << endl;
             for (auto io: disk) {
-                cout << io->id << " ";
+                cout << io->id << ", " << io->track << endl;
             }
             cout << endl;
         }
@@ -136,8 +150,22 @@ public:
          */
         auto peek_head = head + incr;
 
+        // Check for multiple overlapping io requests on the same track when moving backwards.
+        if (incr < 0) {
+            auto precision_peek = peek_head;
+            while (true) {
+                precision_peek--;
+                if ((precision_peek < disk.begin()) || ((*precision_peek)->track != (*peek_head)->track)) {
+                    precision_peek++;
+                    break;
+                }
+            }
+            peek_head = precision_peek;
+        }
+
+
         // Reached end of disk.
-        if (peek_head < disk.begin() || peek_head == disk.end())
+        if (peek_head < disk.begin() || peek_head >= disk.end())
             return nullptr;
 
         return *peek_head;
@@ -145,13 +173,15 @@ public:
 };
 
 class FIFO : public IOScheduler {
+int q_idx = 0;
 public:
     Request *get_io(int time) override {
-        if (io_queue.empty())
+        if (q_idx >= io_queue.size())
             return nullptr;
 
         // Find the target track on disk.
-        Request *next_io = io_queue.front();
+        Request *next_io = io_queue[q_idx];
+        q_idx++;
         auto disk_it = disk.begin();
         while (disk_it != disk.end()) {
             if ((*disk_it)->id == next_io->id)
@@ -164,7 +194,6 @@ public:
         if (!(head >= disk.begin() && head < disk.end()))
             head = disk.begin();
         scan_incr = distance(head, disk_it);
-        io_queue.pop_front();
 
         return IOScheduler::get_io(time);
     }
@@ -176,21 +205,30 @@ public:
         /*
          * Find the IO request in queue with the shortest seek time and return it.
          */
-        // Determine the nearest request by disk track.
-        Request *up_req = peek_disk(-1), *down_req = peek_disk(1), *nearest_io;
-        if (up_req == nullptr && down_req == nullptr) {
-            if (DEBUG)
-                cout << "IO queue empty.";
+        if (disk.empty())
             return nullptr;
-        }
 
-        // Determine the nearest track for IO.
-        if (up_req == nullptr) {
-            scan_incr = 1;
-        } else if (down_req == nullptr) {
-            scan_incr = -1;
+        if (!(head >= disk.begin() && head < disk.end())) {
+            head = disk.begin();
+            scan_incr = 0;
         } else {
-            scan_incr = abs(up_req->track - curr_track) <= abs(down_req->track - curr_track) ? -1 : 1;
+            // Determine the nearest request by disk track.
+            Request *up_req = peek_disk(-1), *down_req = peek_disk(1), *nearest_io;
+            if (up_req == nullptr && down_req == nullptr) {
+                if (DEBUG)
+                    cout << "IO queue empty.";
+                return nullptr;
+            }
+
+            // Determine the nearest track for IO.
+            if (up_req == nullptr) {
+                scan_incr = disk_dist_by_id(down_req->id);
+            } else if (down_req == nullptr) {
+                scan_incr = disk_dist_by_id(up_req->id);
+            } else {
+                scan_incr = abs(up_req->track - curr_track) <= abs(down_req->track - curr_track) ? disk_dist_by_id(
+                        up_req->id) : disk_dist_by_id(down_req->id);
+            }
         }
 
         // Jump to the target track and get the IO request for it.
@@ -258,6 +296,19 @@ public:
         io_requests.push_back(request);
     }
 
+    void print_metrics(IOScheduler *scheduler){
+        auto io_it = scheduler->io_queue.begin();
+        Request *io = *io_it;
+        for(; io_it != scheduler->io_queue.end(); io_it++){
+            io = *io_it;
+            printf("%5d: %5d %5d %5d\n", io->id, io->arr_time, io->start_time, io->end_time);
+        }
+        printf("SUM: %d %d %.2lf %.2lf %d\n",
+               io->end_time, scheduler->total_movement, (float) scheduler->total_turnaround / (float) io_idx,
+               (float) scheduler->total_wait / (float) io_idx,
+               scheduler->max_wait);
+    }
+
     void simulate(IOScheduler *scheduler) {
         while (true) {
             if (!io_requests.empty() && time == io_requests.front()->arr_time) {
@@ -268,9 +319,7 @@ public:
                 io_requests.pop_front();
             }
 
-            if (curr_io != nullptr && time == curr_io->end_time) {
-                printf("%5d: %5d %5d %5d\n", curr_io->id, curr_io->arr_time, curr_io->start_time, curr_io->end_time);
-
+            if (curr_io != nullptr && time >= curr_io->end_time) {
                 curr_io = nullptr;
             }
 
@@ -287,9 +336,7 @@ public:
             time++;
         }
 
-        printf("SUM: %d %d %.2lf %.2lf %d\n",
-               time, scheduler->total_movement, (float) scheduler->total_turnaround / (float) io_idx, (float) scheduler->total_wait / (float) io_idx,
-               scheduler->max_wait);
+        print_metrics(scheduler);
 
     }
 };
