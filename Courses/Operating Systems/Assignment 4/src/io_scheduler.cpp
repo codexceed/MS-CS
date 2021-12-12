@@ -96,7 +96,7 @@ public:
         map_request_to_disk(request, &disk);
     };
 
-    virtual Request *get_io(int time) {
+    virtual Request *get_io(int &time) {
         if (disk.empty())
             return nullptr;
 
@@ -126,6 +126,8 @@ public:
         Request *io = *seek_target;
         io->start_time = time;
         int movement = abs(io->track - curr_track), wait_time = io->start_time - io->arr_time;;
+        if (movement == 0)
+            time--;
         io->end_time = io->start_time + movement;
 
         // Update metrics
@@ -173,9 +175,9 @@ public:
 };
 
 class FIFO : public IOScheduler {
-int q_idx = 0;
+    int q_idx = 0;
 public:
-    Request *get_io(int time) override {
+    Request *get_io(int &time) override {
         if (q_idx >= io_queue.size())
             return nullptr;
 
@@ -201,7 +203,7 @@ public:
 
 class SSTF : public IOScheduler {
 public:
-    Request *get_io(int time) final {
+    Request *get_io(int &time) final {
         /*
          * Find the IO request in queue with the shortest seek time and return it.
          */
@@ -212,6 +214,8 @@ public:
             head = disk.begin();
             scan_incr = 0;
         } else {
+//            if ((*head)->id == 5)
+//                cout << "Yolo\n" << endl;
             // Determine the nearest request by disk track.
             Request *up_req = peek_disk(-1), *down_req = peek_disk(1), *nearest_io;
             if (up_req == nullptr && down_req == nullptr) {
@@ -226,8 +230,18 @@ public:
             } else if (down_req == nullptr) {
                 scan_incr = disk_dist_by_id(up_req->id);
             } else {
-                scan_incr = abs(up_req->track - curr_track) <= abs(down_req->track - curr_track) ? disk_dist_by_id(
-                        up_req->id) : disk_dist_by_id(down_req->id);
+//                if ((*head)->id == 5){
+//                    cout << up_req->track - curr_track << endl;
+//                    cout << down_req->track - curr_track << endl;
+//                }
+                int up_distance = abs(up_req->track - curr_track), down_distance = abs(down_req->track - curr_track);
+                if (up_distance == down_distance) {
+                    scan_incr = up_req->id < down_req->id ? disk_dist_by_id(up_req->id) : disk_dist_by_id(down_req->id);
+                } else {
+                    scan_incr =
+                            up_distance < down_distance ? disk_dist_by_id(up_req->id) : disk_dist_by_id(down_req->id);
+                }
+
             }
         }
 
@@ -238,7 +252,7 @@ public:
 
 class LOOK : public IOScheduler {
 public:
-    Request *get_io(int time) override {
+    Request *get_io(int &time) override {
         Request *next_io = peek_disk(scan_incr);
 
         // Switch direction if no more IO requests in current direction.
@@ -251,7 +265,7 @@ public:
 
 class CLOOK : public IOScheduler {
 public:
-    Request *get_io(int time) override {
+    Request *get_io(int &time) override {
         Request *next_io = peek_disk(scan_incr);
 
         // Jump back to first track
@@ -273,7 +287,7 @@ public:
         map_request_to_disk(request, &add_disk);
     }
 
-    Request *get_io(int time) override {
+    Request *get_io(int &time) override {
         if (disk.empty()) {
             disk = add_disk;
             add_disk.clear();
@@ -296,16 +310,16 @@ public:
         io_requests.push_back(request);
     }
 
-    void print_metrics(IOScheduler *scheduler){
+    void print_metrics(IOScheduler *scheduler) const {
         auto io_it = scheduler->io_queue.begin();
         Request *io = *io_it;
-        for(; io_it != scheduler->io_queue.end(); io_it++){
+        for (; io_it != scheduler->io_queue.end(); io_it++) {
             io = *io_it;
             printf("%5d: %5d %5d %5d\n", io->id, io->arr_time, io->start_time, io->end_time);
         }
         printf("SUM: %d %d %.2lf %.2lf %d\n",
-               io->end_time, scheduler->total_movement, (float) scheduler->total_turnaround / (float) io_idx,
-               (float) scheduler->total_wait / (float) io_idx,
+               time, scheduler->total_movement, (double) scheduler->total_turnaround / (double) io_idx,
+               (double) scheduler->total_wait / (double) io_idx,
                scheduler->max_wait);
     }
 
@@ -319,7 +333,7 @@ public:
                 io_requests.pop_front();
             }
 
-            if (curr_io != nullptr && time >= curr_io->end_time) {
+            if (curr_io != nullptr && time == curr_io->end_time) {
                 curr_io = nullptr;
             }
 
