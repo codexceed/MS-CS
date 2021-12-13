@@ -269,6 +269,15 @@ public:
         else if (scan_incr != 1 && scan_incr != -1)
             scan_incr = 1;
 
+        // Check if new IO requests have been mapped on current track after the current request
+        if (scan_incr == -1){
+            Request *overlap_check_io = peek_disk(1);
+            if (overlap_check_io != nullptr && overlap_check_io->track == (*head)->track){
+                scan_incr = 1;
+                io_overlap_reverse = true;
+            }
+        }
+
         Request *next_io = peek_disk(scan_incr);
 
         // Switch direction if no more IO requests in current direction.
