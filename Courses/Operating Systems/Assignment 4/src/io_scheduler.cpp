@@ -110,9 +110,9 @@ public:
         auto seek_target = head + scan_incr;
 
         if (DEBUG) {
-            cout << "IO ID, Track" << endl;
+            cout << "IO ID, Arrival Time, Track" << endl;
             for (auto io: disk) {
-                cout << io->id << ", " << io->track << endl;
+                cout << io->id << ", " << io->arr_time << ", " << io->track << endl;
             }
             cout << endl;
         }
@@ -139,6 +139,7 @@ public:
         // Change track
         curr_track = io->track;
 
+        // Remove previous IO request from disk and remap head to the current one.
         if (!(head == seek_target))
             disk.erase(head);
         set_head_to_id(&disk, io->id);
@@ -214,9 +215,6 @@ public:
             head = disk.begin();
             scan_incr = 0;
         } else {
-//            if ((*head)->id == 5)
-//                cout << "Yolo\n" << endl;
-            // Determine the nearest request by disk track.
             Request *up_req = peek_disk(-1), *down_req = peek_disk(1), *nearest_io;
             if (up_req == nullptr && down_req == nullptr) {
                 if (DEBUG)
@@ -230,10 +228,6 @@ public:
             } else if (down_req == nullptr) {
                 scan_incr = disk_dist_by_id(up_req->id);
             } else {
-//                if ((*head)->id == 5){
-//                    cout << up_req->track - curr_track << endl;
-//                    cout << down_req->track - curr_track << endl;
-//                }
                 int up_distance = abs(up_req->track - curr_track), down_distance = abs(down_req->track - curr_track);
                 if (up_distance == down_distance) {
                     scan_incr = up_req->id < down_req->id ? disk_dist_by_id(up_req->id) : disk_dist_by_id(down_req->id);
@@ -251,29 +245,90 @@ public:
 };
 
 class LOOK : public IOScheduler {
+    bool io_overlap_reverse = false;
 public:
     Request *get_io(int &time) override {
+        if (disk.empty())
+            return nullptr;
+
+        // Start of IO scheduling, set head to seek the first track.
+        if (!(head >= disk.begin() && head < disk.end())) {
+            head = disk.begin();
+            scan_incr = 0;
+        }
+        // Handle the case where we encountered multiple IOs on the same track by fixing previous large track jump.
+        else if(scan_incr != 1 && scan_incr != -1)
+            scan_incr = 1;
+
         Request *next_io = peek_disk(scan_incr);
 
         // Switch direction if no more IO requests in current direction.
-        if (next_io == nullptr)
+        if (next_io == nullptr){
             scan_incr *= -1;
+            next_io = peek_disk(scan_incr);
+
+            // No new io on this disk
+            if (next_io == nullptr)
+                return nullptr;
+        }
+
+        // Switch back to original scanning direction once we're done handling overlapping IOs in reverse.
+        if (io_overlap_reverse && next_io->track != (*head)->track){
+            scan_incr = -1;
+            next_io = peek_disk(scan_incr);
+            if (next_io == nullptr){
+                scan_incr *= -1;
+                next_io = peek_disk(scan_incr);
+
+                // No new io on this disk
+                if (next_io == nullptr)
+                    return nullptr;
+            }
+            io_overlap_reverse = false;
+        }
+
+        // Update increment for multiple IOs on the same track.
+        scan_incr = disk_dist_by_id(next_io->id);
+
+        // Found overlapping IOs while going up the tracks. Enter reverse scanning to handle overlapping IOs.
+        if (scan_incr < -1)
+            io_overlap_reverse = true;
 
         return IOScheduler::get_io(time);
     }
 };
 
-class CLOOK : public IOScheduler {
+class CLOOK : public LOOK {
 public:
     Request *get_io(int &time) override {
-        Request *next_io = peek_disk(scan_incr);
+        if (disk.empty())
+            return nullptr;
 
-        // Jump back to first track
-        if (next_io == nullptr) {
-            head = disk.begin();
+        // If we're at the end of disk, set head to invalid track so that LOOK resets it to track 0;
+        bool head_at_end = false;
+        if (head == disk.end() - 1 && head != disk.begin()){
+            if (DEBUG) {
+                if (head >= disk.begin() && head < disk.end()) {
+                    cout << "Current head ID: " << (*head)->id << endl;
+                }
+                cout << "IO ID, Arrival Time, Track" << endl;
+                for (auto io: disk) {
+                    cout << io->id << ", " << io->arr_time << ", " << io->track << endl;
+                }
+                cout << endl;
+            }
+            head = disk.end();
+            head_at_end = true;
         }
 
-        return IOScheduler::get_io(time);
+        // Lookup next IO on disk.
+        Request *next_io = LOOK::get_io(time);
+
+        // Remove the last IO at end of disk.
+        if (head_at_end)
+            disk.pop_back();
+
+        return next_io;
     }
 };
 
