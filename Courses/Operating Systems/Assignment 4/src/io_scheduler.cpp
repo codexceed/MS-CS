@@ -59,31 +59,36 @@ public:
         head = disk_it;
     }
 
-    void map_request_to_disk(Request *request, requests_t *active_disk) {
+    void map_request_to_disk(Request *request, requests_t &active_disk) {
         /*
          * Map new request on disk in order of tracks.
          */
-        if (active_disk->empty()) {
-            active_disk->push_back(request);
+        if (active_disk.empty()) {
+            active_disk.push_back(request);
         } else {
-            auto dq_it = active_disk->begin();
-            Request *curr_request = *head;
+            auto dq_it = active_disk.begin();
 
-            for (; dq_it != active_disk->end(); dq_it++)
+            // In the event of head being on another disk (FLOOK).
+            Request *curr_request = nullptr;
+            if (head >= active_disk.begin() && head < active_disk.end())
+                curr_request = *head;
+
+            for (; dq_it != active_disk.end(); dq_it++)
                 if ((*dq_it)->track > request->track)
                     break;
 
-            if (dq_it == active_disk->end())
-                active_disk->push_back(request);
+            if (dq_it == active_disk.end())
+                active_disk.push_back(request);
 
-            else active_disk->insert(dq_it, request);
+            else active_disk.insert(dq_it, request);
 
             // Adjust head after new mapping.
-            set_head_to_id(active_disk, curr_request->id);
+            if (curr_request != nullptr)
+                set_head_to_id(&active_disk, curr_request->id);
+        }
 
-            if (DEBUG) {
-                cout << "Inserting IO ID: " << request->id << endl;
-            }
+        if (DEBUG) {
+            cout << "Inserting IO ID: " << request->id << endl;
         }
     }
 
@@ -93,7 +98,7 @@ public:
          */
         io_queue.push_back(request);
 
-        map_request_to_disk(request, &disk);
+        map_request_to_disk(request, disk);
     };
 
     virtual Request *get_io(int &time) {
@@ -126,8 +131,11 @@ public:
         Request *io = *seek_target;
         io->start_time = time;
         int movement = abs(io->track - curr_track), wait_time = io->start_time - io->arr_time;;
+
+        // If we're performing operations on the same track as before, time doesn't increment.
         if (movement == 0)
             time--;
+
         io->end_time = io->start_time + movement;
 
         // Update metrics
@@ -140,9 +148,10 @@ public:
         curr_track = io->track;
 
         // Remove previous IO request from disk and remap head to the current one.
-        if (!(head == seek_target))
+        if (!(head == seek_target)) {
             disk.erase(head);
-        set_head_to_id(&disk, io->id);
+            set_head_to_id(&disk, io->id);
+        }
 
         return io;
     }
@@ -256,14 +265,14 @@ public:
             head = disk.begin();
             scan_incr = 0;
         }
-        // Handle the case where we encountered multiple IOs on the same track by fixing previous large track jump.
-        else if(scan_incr != 1 && scan_incr != -1)
+            // Handle the case where we encountered multiple IOs on the same track by fixing previous large track jump.
+        else if (scan_incr != 1 && scan_incr != -1)
             scan_incr = 1;
 
         Request *next_io = peek_disk(scan_incr);
 
         // Switch direction if no more IO requests in current direction.
-        if (next_io == nullptr){
+        if (next_io == nullptr) {
             scan_incr *= -1;
             next_io = peek_disk(scan_incr);
 
@@ -273,10 +282,10 @@ public:
         }
 
         // Switch back to original scanning direction once we're done handling overlapping IOs in reverse.
-        if (io_overlap_reverse && next_io->track != (*head)->track){
+        if (io_overlap_reverse && next_io->track != (*head)->track) {
             scan_incr = -1;
             next_io = peek_disk(scan_incr);
-            if (next_io == nullptr){
+            if (next_io == nullptr) {
                 scan_incr *= -1;
                 next_io = peek_disk(scan_incr);
 
@@ -306,7 +315,7 @@ public:
 
         // If we're at the end of disk, set head to invalid track so that LOOK resets it to track 0;
         bool head_at_end = false;
-        if (head == disk.end() - 1 && head != disk.begin()){
+        if (head == disk.end() - 1 && head != disk.begin()) {
             if (DEBUG) {
                 if (head >= disk.begin() && head < disk.end()) {
                     cout << "Current head ID: " << (*head)->id << endl;
@@ -332,25 +341,51 @@ public:
     }
 };
 
-class FLOOK : public IOScheduler {
+class FLOOK : public LOOK {
     requests_t add_disk;
 public:
+    FLOOK() { scan_incr = -1; }
+
     void put_io(Request *request) override {
         /*
          * Map new request to add disk, instead of active disk.
          */
-        map_request_to_disk(request, &add_disk);
+        io_queue.push_back(request);
+        map_request_to_disk(request, add_disk);
     }
 
     Request *get_io(int &time) override {
-        if (disk.empty()) {
+        // Once the active disk (queue) is empty, swap it with add disk (queue).
+        if (disk.size() < 2) {
+            if (add_disk.empty())
+                return nullptr;
+
+            // If head is previously positioned, we need to map it again onto the new disk mapping for LOOK scan to work.
+            int head_id = -1;
+            if (head >= disk.begin() && head < disk.end()) {
+                Request *curr_io = *head;
+                auto disk_it = add_disk.begin();
+                for (; disk_it != add_disk.end(); disk_it++) {
+                    if ((*disk_it)->track >= curr_io->track)
+                        break;
+                }
+
+                if (disk_it != add_disk.end())
+                    add_disk.insert(disk_it, curr_io);
+                else add_disk.push_back(curr_io);
+
+                head_id = curr_io->id;
+            }
+
+            // Map add_disk values to disk and remap head.
             disk = add_disk;
+            if (head_id != -1)
+                set_head_to_id(&disk, head_id);
             add_disk.clear();
-            scan_incr *= -1;
-            head = scan_incr == 1 ? disk.begin() : disk.end();
+
         }
 
-        return IOScheduler::get_io(time);
+        return LOOK::get_io(time);
 
     }
 };
