@@ -2,13 +2,12 @@
 // Created by Sarthak Joshi on 12/9/21.
 //
 #include <iostream>
-#include "string"
 #include <unistd.h>
-#include "deque"
-#include "cmath"
-#include "fstream"
-#include "sstream"
-#include "iterator"
+#include <deque>
+#include <cmath>
+#include <fstream>
+#include <sstream>
+#include <iterator>
 
 using namespace std;
 
@@ -33,7 +32,7 @@ class IOScheduler {
 public:
     int curr_track = 0, scan_incr = 1, total_movement = 0, total_turnaround = 0, total_wait = 0, max_wait = 0;
     requests_t io_queue, disk;
-    requests_t::iterator head = disk.begin();
+    requests_t::iterator head;
 
     int disk_dist_by_id(int id) {
         auto disk_it = disk.begin();
@@ -355,14 +354,6 @@ class FLOOK : public LOOK {
 public:
     FLOOK() { scan_incr = -1; }
 
-    void put_io(Request *request) override {
-        /*
-         * Map new request to add disk, instead of active disk.
-         */
-        io_queue.push_back(request);
-        map_request_to_disk(request, add_disk);
-    }
-
     Request *get_io(int &time) override {
         // Once the active disk (queue) is empty, swap it with add disk (queue).
         if (disk.size() < 2) {
@@ -396,6 +387,14 @@ public:
 
         return LOOK::get_io(time);
 
+    }
+
+    void put_io(Request *request) override {
+        /*
+         * Map new request to add disk, instead of active disk.
+         */
+        io_queue.push_back(request);
+        map_request_to_disk(request, add_disk);
     }
 };
 
