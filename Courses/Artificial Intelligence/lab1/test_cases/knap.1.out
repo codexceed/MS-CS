@@ -1,0 +1,5 @@
+Start: [A E] = 6
+choose: [A C E] = 2
+choose: [B C E] = 1
+choose: [B C D] = 0
+Goal: [B C D] = 0
