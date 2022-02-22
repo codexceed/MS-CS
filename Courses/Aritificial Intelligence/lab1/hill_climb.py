@@ -280,7 +280,6 @@ def parse_cli_args() -> Tuple:
         description="Solve given problem using hill climbing algorithm."
     )
     parser.add_argument(
-        "-v",
         "-verbose",
         dest="verbose",
         help="Enable verbose output",
@@ -308,6 +307,7 @@ def parse_cli_args() -> Tuple:
     )
     parser.add_argument(
         "knapsack_file",
+        metavar="knapsack-file",
         help="Path to knapsack input file",
         type=str,
         nargs="?",
