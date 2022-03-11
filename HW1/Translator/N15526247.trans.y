@@ -26,15 +26,15 @@ using namespace asttree;
 %token <val> RULE_OR
 %token <val> REP_ONE REP_ZERO
 
-%type <val> prog statements statement 
+%type <val> prog statements statement one_or_more
 
 %%
 
 prog : SECTION statements SECTION   {  $$ = new prog($1,$2,$3);  /* This adds a node to our own parse tree */
                                     //    $$->doConversion();
-                                        cout << "=================This is the final output==================";
+                                        cout << "=================This is the BNF Grammar output=================";
                                        $$->print(cout);
-                                       cout << "===================End of output========================";
+                                        cout << "==========================End of output=========================";
                                     } 
     ;
 
@@ -50,8 +50,12 @@ statement :  TERM_OR_NONTERM REWRITES statement  {  $$ = new statement($1, $2, $
     |        TERM_OR_NONTERM statement           {  $$ = new statement($1, $2); /* This adds a node to our own parse tree */ }
     |        TERM_OR_NONTERM GROUP_OR statement  {  $$ = new statement($1, $2, $3); }
     |        ENDL                                {  $$ = new terminal(""); }
+    |        GROUPING_LEFT statement GROUPING_RIGHT {  $$ = new statement($1); }
+    |        statement one_or_more REP_ONE       {  $$ = new statement($1, $2, $3)}
     |        %empty
     ;
+
+one_or_more : TERM_OR_NONTERM one_or_more               {  $$ = new statement($1)}
 
 
  /* Fill in any other rules here */
