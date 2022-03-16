@@ -415,6 +415,7 @@ def convert(assertions: List[str], debug: bool = False) -> List[str]:
     Returns:
         List of CNF statements
     """
+    assertions = [stmt for stmt in assertions if stmt]
     if debug:
         print("Converting BNF to CNF")
     debug_steps = [2, 3, 5, 9]

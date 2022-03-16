@@ -39,7 +39,7 @@ if __name__ == "__main__":
     mode, verbose, input_file = parse_cli_args()
 
     with open(input_file, "r") as input_f:
-        lines = input_f.read().split("\n")
+        lines = [line for line in input_f.read().split("\n") if line]
 
     if mode == "cnf":
         print("\n".join(convert(lines, verbose)))
