@@ -1,0 +1,70 @@
+P Q R
+!R P !Q
+P !W
+!Q !R !W
+R !P !Q
+U X
+U !X
+Q !U
+!R !U
+easyCase W = false
+P Q R
+P !Q !R
+!P !Q R
+U X
+U !X
+Q !U
+!R !U
+hard case, guess: P=true
+!Q R
+U X
+U !X
+Q !U
+!R !U
+hard case, guess: Q=true
+R
+U X
+!X U
+!R !U
+easyCase R = true
+U X
+U !X
+!U
+easyCase U = false
+X
+!X
+easyCase X = true
+!X contradiction
+fail|hard case, try: Q=false
+U X
+U !X
+!U
+!R !U
+easyCase U = false
+X
+!X
+easyCase X = true
+!X contradiction
+fail|hard case, try: P=false
+Q R
+!Q !R
+U X
+U !X
+Q !U
+!U !R
+hard case, guess: Q=true
+!R
+U X
+U !X
+!R !U
+easyCase R = false
+U X
+U !X
+easyCase U = true
+unbound X=false
+P = false
+Q = true
+R = false
+U = true
+W = false
+X = false
