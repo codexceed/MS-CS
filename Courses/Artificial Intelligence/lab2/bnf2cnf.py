@@ -416,7 +416,7 @@ def convert(assertions: List[str]) -> List[str]:
         distribute_ors,
         remove_redundant_parenthesis,
         lambda x: re.sub(r"[()|]", "", x),
-        lambda y: y.strip()
+        lambda x: re.sub(r"!\s", "!", x),
     ]
     for transform in transform_funcs:
         assertions = map(transform, assertions)
@@ -429,7 +429,7 @@ def convert(assertions: List[str]) -> List[str]:
         else:
             cnfs.append(stmt)
 
-    return cnfs
+    return list(map(lambda x: x.strip(), cnfs))  # For some reason, strip() doesn't work in above transformations
 
 
 if __name__ == "__main__":
@@ -444,4 +444,5 @@ if __name__ == "__main__":
     with open("test_cases/bnf2cnf/case2/input", "r") as f:
         assertions = f.read().split("\n")
 
-    print("\n".join(convert(assertions)))
+    with open("out", "w") as f:
+        f.write("\n".join(convert(assertions)))
