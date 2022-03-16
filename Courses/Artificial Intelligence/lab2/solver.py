@@ -1,12 +1,55 @@
+from argparse import ArgumentParser
+from typing import Tuple
+
 from dpll import DPLLSolver
+from bnf2cnf import convert
+
+
+def parse_cli_args() -> Tuple:
+    """Parse CLI input, set globals.
+
+    Returns:
+        Argument values from CLI
+    """
+    parser = ArgumentParser(
+        description="Solve BNF and CNF using DPLL"
+    )
+    parser.add_argument(
+        "-verbose",
+        dest="verbose",
+        help="Enable verbose output",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-mode",
+        help="Operation mode",
+        required=True,
+        nargs=2,
+        metavar=("mode", "input-file")
+    )
+    args = parser.parse_args()
+
+    mode, input_file = args.mode
+
+    print(args)
+
+    return mode, args.verbose, input_file
 
 
 if __name__ == "__main__":
-    with open("test_cases/case1/input", "r") as f:
-        cnf = f.read().split("\n")
+    mode, verbose, input_file = parse_cli_args()
 
-    solver = DPLLSolver(cnf, True)
-    assignments = solver.solve()
-    assignments = sorted([(k, v) for k, v in assignments.items()], key=lambda x: x[0])
+    with open(input_file, "r") as input_f:
+        lines = input_f.read().split("\n")
 
-    print("\n".join([f"{x} = {str(y).lower()}" for x, y in assignments]))
+    if mode == "cnf":
+        print("\n".join(convert(lines)))
+    elif mode == "dpll":
+        solver = DPLLSolver(lines, verbose)
+        print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(solver.solve().items(), key=lambda x: x[0])]))
+    elif mode == "solver":
+        solver = DPLLSolver(convert(lines), verbose)
+        print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(solver.solve().items(), key=lambda x: x[0])]))
+    else:
+        raise Exception("Invalid Mode.")
