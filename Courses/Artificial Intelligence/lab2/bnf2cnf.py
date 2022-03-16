@@ -46,6 +46,14 @@ def tokenize(s: str) -> List[str]:
                 tokens.append(s[i:idx_close])
                 i = idx_close
                 continue
+            elif re.match(r"[A-Z]", c):
+                k = i + 1
+                for j in range(i+1, len(s)):
+                    k += 1
+                    if not re.match(r"[A-Z_]", s[j]):
+                        break
+                tokens.append(s[i:k])
+                i = k-1
             else:
                 tokens.append(c)
         elif s[i: i + 3] == "<=>":
@@ -450,4 +458,4 @@ def convert(assertions: List[str], debug: bool = False) -> List[str]:
         print("\nFinal CNF statements")
         print("\n".join(cnfs), "\n\n")
 
-    return cnfs  # For some reason, strip() doesn't work in above transformations
+    return cnfs

@@ -152,4 +152,8 @@ class DPLLSolver:
         if self.debug:
             print("Solving CNF using DPLL")
             print("\n".join(self.sentences))
-        return self._solve_assignment(self.letters, self.sentences)
+        assignments = self._solve_assignment(self.letters, self.sentences)
+        if assignments is None and self.debug:
+            print("NO VALID ASSIGNMENT")
+
+        return assignments

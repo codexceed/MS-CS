@@ -45,9 +45,13 @@ if __name__ == "__main__":
         print("\n".join(convert(lines, verbose)))
     elif mode == "dpll":
         solver = DPLLSolver(lines, verbose)
-        print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(solver.solve().items(), key=lambda x: x[0])]))
+        assignments = solver.solve()
+        if assignments:
+            print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(assignments.items(), key=lambda x: x[0])]))
     elif mode == "solver":
         solver = DPLLSolver(convert(lines, verbose), verbose)
-        print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(solver.solve().items(), key=lambda x: x[0])]))
+        assignments = solver.solve()
+        if assignments:
+            print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(assignments.items(), key=lambda x: x[0])]))
     else:
         raise Exception("Invalid Mode.")
