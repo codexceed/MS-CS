@@ -32,8 +32,6 @@ def parse_cli_args() -> Tuple:
 
     mode, input_file = args.mode
 
-    print(args)
-
     return mode, args.verbose, input_file
 
 
@@ -44,12 +42,12 @@ if __name__ == "__main__":
         lines = input_f.read().split("\n")
 
     if mode == "cnf":
-        print("\n".join(convert(lines)))
+        print("\n".join(convert(lines, verbose)))
     elif mode == "dpll":
         solver = DPLLSolver(lines, verbose)
         print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(solver.solve().items(), key=lambda x: x[0])]))
     elif mode == "solver":
-        solver = DPLLSolver(convert(lines), verbose)
+        solver = DPLLSolver(convert(lines, verbose), verbose)
         print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(solver.solve().items(), key=lambda x: x[0])]))
     else:
         raise Exception("Invalid Mode.")

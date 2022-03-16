@@ -47,6 +47,9 @@ def tokenize(s: str) -> List[str]:
                 i = idx_close
                 continue
             else:
+                for j in range(i+1, len(s)):
+                    if re.match(r"[A-Z_]", s[j]):
+                        c += s[j]
                 tokens.append(c)
         elif s[i: i + 3] == "<=>":
             tokens.append("<=>")
@@ -397,15 +400,20 @@ def distribute_ors(statement: str) -> str:
     return " ".join(tokens)
 
 
-def convert(assertions: List[str]) -> List[str]:
+def convert(assertions: List[str], debug: bool = False) -> List[str]:
     """Convert given set of BNF propositions to CNF
 
     Args:
         assertions: List of BNF statements
+        debug: Set true to print debug messages
 
     Returns:
         List of CNF statements
     """
+    if debug:
+        print("Converting BNF to CNF")
+    debug_steps = [2, 3, 5, 9]
+
     transform_funcs = [
         parenthesize,
         remove_redundant_parenthesis,
@@ -418,31 +426,31 @@ def convert(assertions: List[str]) -> List[str]:
         lambda x: re.sub(r"[()|]", "", x),
         lambda x: re.sub(r"!\s", "!", x),
     ]
-    for transform in transform_funcs:
-        assertions = map(transform, assertions)
+
+    trans_stmt = []
+    for stmt in assertions:
+        if debug:
+            print(stmt)
+
+        for i, transform in enumerate(transform_funcs):
+            stmt = transform(stmt)
+
+            if debug and i in debug_steps:
+                print(stmt)
+
+        trans_stmt.append(stmt)
 
     cnfs = []
-
-    for stmt in assertions:
+    for stmt in trans_stmt:
         if "&" in stmt:
             cnfs += stmt.split("&")
         else:
             cnfs.append(stmt)
 
-    return list(map(lambda x: x.strip(), cnfs))  # For some reason, strip() doesn't work in above transformations
+    cnfs = list(map(lambda x: x.strip(), cnfs))
 
+    if debug:
+        print("\nFinal CNF statements")
+        print("\n".join(cnfs), "\n\n")
 
-if __name__ == "__main__":
-    # print(demorgan_resolve("C & !(A & !B |(D & !A)) | (C | !(D & B & C))"))
-    # print(
-    #     demorgan_resolve(
-    #         "! A & !C & (!D & B | !(C & !A | B | !(D | E))) | !( !(X & Z) | !Y)"
-    #     )
-    # )
-    # print(resolve_one_way_implies("((A => B) & (B => A) => C) & (C => (A => B) & (B => A))"))
-    # print(remove_redundant_parenthesis("!C & A | B | !((A) | !(D | E | !B) & !(A))"))
-    with open("test_cases/bnf2cnf/case2/input", "r") as f:
-        assertions = f.read().split("\n")
-
-    with open("out", "w") as f:
-        f.write("\n".join(convert(assertions)))
+    return cnfs  # For some reason, strip() doesn't work in above transformations

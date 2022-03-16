@@ -66,8 +66,9 @@ class DPLLSolver:
         Returns:
             Assignment of letter values if found
         """
-        for clause in clauses:
-            print(clause)
+        if self.debug:
+            for clause in clauses:
+                print(clause)
 
         if not clauses:
             if self.debug:
@@ -104,7 +105,7 @@ class DPLLSolver:
 
                     if self.debug:
                         print(
-                            f"{'easy case: ' + easy if easy else 'hard case: guess'} {letter} = false"
+                            f"{'easy case: ' + easy if easy else 'hard case: guess'} {letter}=false"
                         )
 
                     assignments = self._solve_assignment(prop_letters, false_clauses)
@@ -126,7 +127,7 @@ class DPLLSolver:
 
                     if self.debug:
                         print(
-                            f"{'easy case: ' + easy if easy else 'hard case: guess'} {letter} = true"
+                            f"{'easy case: ' + easy if easy else 'hard case: guess'} {letter}=true"
                         )
 
                     assignments = self._solve_assignment(prop_letters, true_clauses)
@@ -148,4 +149,7 @@ class DPLLSolver:
         Returns:
             Assignments for letters
         """
+        if self.debug:
+            print("Solving CNF using DPLL")
+            print("\n".join(self.sentences))
         return self._solve_assignment(self.letters, self.sentences)

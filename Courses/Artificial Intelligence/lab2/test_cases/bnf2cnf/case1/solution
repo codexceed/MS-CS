@@ -1,15 +1,15 @@
-A <=> B <=> C
-((A => B) & (B => A) => C) & (C => (A => B) & (B => A))
-(!((!A | B) & (!B | A)) | C) & (!C | (!A | B) & (!B | A))
-(A & !B | B & !A | C) & (!C | (!A | B) & (!B | A))
-A | !B
-A | !B
-A | !B
-A | !B
 A !B
-!C !A B
-!C !B A
-A B C
-A !A C
-!B B C
-!B !A C
+!A B !C
+!B A !C
+B A C
+!A !B C
+hard case, guess: A=true
+B !C
+!B C
+hard case, guess: B=true
+C
+C
+easyCase C = true
+A = true
+B = true
+C = true
