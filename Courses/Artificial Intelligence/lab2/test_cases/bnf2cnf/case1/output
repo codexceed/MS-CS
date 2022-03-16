@@ -1,0 +1,7 @@
+A !B
+!A B !C
+!B A !C
+B A C
+!A A C
+B !B C
+!A !B C
