@@ -47,9 +47,6 @@ def tokenize(s: str) -> List[str]:
                 i = idx_close
                 continue
             else:
-                for j in range(i+1, len(s)):
-                    if re.match(r"[A-Z_]", s[j]):
-                        c += s[j]
                 tokens.append(c)
         elif s[i: i + 3] == "<=>":
             tokens.append("<=>")
