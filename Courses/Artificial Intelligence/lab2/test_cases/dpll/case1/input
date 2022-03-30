@@ -1,0 +1,7 @@
+P Q !R
+P !Q R
+!P Q
+!Q R W
+!R W
+!W !X
+!W X

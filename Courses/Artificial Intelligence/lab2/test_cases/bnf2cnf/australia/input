@@ -1,0 +1,52 @@
+WA_R | WA_G | WA_B
+WA_R => ! (WA_G | WA_B)
+WA_G => ! (WA_R | WA_B)
+WA_B => ! (WA_G | WA_R)
+WA_R => ! (NT_R | SA_R)
+WA_G => ! (NT_G | SA_G)
+WA_B => ! (NT_B | SA_B)
+
+NT_R | NT_G | NT_B
+NT_R => ! (NT_G | NT_B)
+NT_G => ! (NT_R | NT_B)
+NT_B => ! (NT_G | NT_R)
+NT_R => ! (WA_R | SA_R | Q_R)
+NT_G => ! (WA_G | SA_G | Q_G)
+NT_B => ! (WA_B | SA_B | Q_B)
+
+SA_R | SA_G | SA_B
+SA_R => ! (SA_G | SA_B)
+SA_G => ! (SA_R | SA_B)
+SA_B => ! (SA_G | SA_R)
+SA_R => ! (NT_R | WA_R | Q_R | NSW_R | V_R)
+SA_G => ! (NT_G | WA_G | Q_G | NSW_G | V_G)
+SA_B => ! (NT_B | WA_B | Q_B | NSW_B | V_B)
+
+Q_R | Q_G | Q_B
+Q_R => ! (Q_G | Q_B)
+Q_G => ! (Q_R | Q_B)
+Q_B => ! (Q_G | Q_R)
+Q_R => ! (NT_R | SA_R | NSW_R)
+Q_G => ! (NT_G | SA_G | NSW_G)
+Q_B => ! (NT_B | SA_B | NSW_B)
+
+NSW_R | NSW_G | NSW_B
+NSW_R => ! (NSW_G | NSW_B)
+NSW_G => ! (NSW_R | NSW_B)
+NSW_B => ! (NSW_G | NSW_R)
+NSW_R => ! (SA_R | Q_R | V_R)
+NSW_G => ! (SA_G | Q_G | V_G)
+NSW_B => ! (SA_B | Q_B | V_B)
+
+V_R | V_G | V_B
+V_R => ! (V_G | V_B)
+V_G => ! (V_R | V_B)
+V_B => ! (V_G | V_R)
+V_R => ! (SA_R | NSW_R)
+V_G => ! (SA_G | NSW_R)
+V_B => ! (SA_B | NSW_R)
+
+T_R | T_G | T_B
+T_R => ! (T_G | T_B)
+T_G => ! (T_R | T_B)
+T_B => ! (T_G | T_R)

@@ -1,0 +1,15 @@
+A !B
+!A B !C
+!B A !C
+B A C
+!A !B C
+hard case, guess: A=true
+B !C
+!B C
+hard case, guess: B=true
+C
+C
+easyCase C = true
+A = true
+B = true
+C = true

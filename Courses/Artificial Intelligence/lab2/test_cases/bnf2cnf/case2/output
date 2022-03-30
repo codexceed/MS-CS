@@ -1,0 +1,23 @@
+P & !Q => W <=> A | B & C
+(P & !Q => W => A | B & C) & (A | B & C => (P & !Q => W))
+(!(!(P & !Q) | W) | (A | B & C)) & (!(A | B & C) | (!(P & !Q) | W))
+(P & !Q & !W | (A | B & C)) & (!A & (!B | !C) | (!P | Q | W))
+A => B
+A => B
+!A | B
+!A | B
+C | B & A
+C | B & A
+C | B & A
+C | B & A
+!A B
+C B
+C A
+!A !P Q W
+!B !C !P Q W
+!W A B
+!W A C
+P A B
+P A C
+!Q A B
+!Q A C
