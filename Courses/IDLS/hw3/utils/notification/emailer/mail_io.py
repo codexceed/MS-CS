@@ -2,7 +2,7 @@ import smtplib
 import socket
 
 
-def send(msg, server='smtp-mail.outlook.com', port='587'):
+def send(msg, server='smtp-mail.outlook.com', port='587', uname=None, passwd=None):
     # contain following in try-except in case of momentary network errors
     try:
         # initialise connection to email server, the default is Outlook
@@ -13,11 +13,15 @@ def send(msg, server='smtp-mail.outlook.com', port='587'):
         # be communicating with TLS encryption
         smtp.starttls()
 
-        # read email and password from file
-        with open('/Users/perfe/.ssh/email.txt', 'r') as fp:
-            email = fp.read()
-        with open('/Users/perfe/.ssh/passwd.txt', 'r') as fp:
-            pwd = fp.read()
+        if not (uname and passwd):
+            # read email and password from file
+            with open('/Users/perfe/.ssh/email.txt', 'r') as fp:
+                email = fp.read()
+            with open('/Users/perfe/.ssh/passwd.txt', 'r') as fp:
+                pwd = fp.read()
+        else:
+            email=uname
+            pwd=passwd
 
         # login to outlook server
         smtp.login(email, pwd)
