@@ -1,0 +1,29 @@
+!A B
+B C
+C A
+!A !P Q W
+!B !C !P Q W
+A !W B
+A !W C
+B A P
+C A P
+B A !Q
+!Q C A
+hard case, guess: A=true
+B
+B C
+!P Q W
+!B !C !P Q W
+easyCase B = true
+!P Q W
+W !C !P Q
+easyCase P = false
+unbound Q=false
+unbound C=false
+unbound W=false
+A = true
+B = true
+C = false
+P = false
+Q = false
+W = false
