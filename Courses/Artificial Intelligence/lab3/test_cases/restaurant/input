@@ -1,0 +1,26 @@
+# Restaurant example from slides
+
+Office : [Ind, Chi]
+Ind=5
+Chi=10
+Ind : [BusyInd, Quiet]
+Ind % .8 .2
+Quiet=10
+# BusyInd is the decision node when busy, stay and eat or go to Chi
+BusyInd : [Eat, GoChi]
+BusyInd % 1
+Eat : [Slow, Fast]
+Eat % .75 .25
+Slow=60
+Fast=30
+
+GoChi=5
+GoChi : [Chi]
+
+Chi : [BusyChi, Quiet]
+Chi % .5 .5
+BusyChi : [Eat, GoInd]
+BusyChi % 1
+
+GoInd=10
+GoInd : [Ind]

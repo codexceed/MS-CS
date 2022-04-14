@@ -11,9 +11,7 @@ def parse_cli_args() -> Tuple:
     Returns:
         Argument values from CLI
     """
-    parser = ArgumentParser(
-        description="Solve BNF and CNF using DPLL"
-    )
+    parser = ArgumentParser(description="Solve BNF and CNF using DPLL")
     parser.add_argument(
         "-verbose",
         dest="verbose",
@@ -26,7 +24,7 @@ def parse_cli_args() -> Tuple:
         help="Operation mode",
         required=True,
         nargs=2,
-        metavar=("mode", "input-file")
+        metavar=("mode", "input-file"),
     )
     args = parser.parse_args()
 
@@ -47,11 +45,25 @@ if __name__ == "__main__":
         solver = DPLLSolver(lines, verbose)
         assignments = solver.solve()
         if assignments:
-            print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(assignments.items(), key=lambda x: x[0])]))
+            print(
+                "\n".join(
+                    [
+                        f"{k} = {str(v).lower()}"
+                        for k, v in sorted(assignments.items(), key=lambda x: x[0])
+                    ]
+                )
+            )
     elif mode == "solver":
         solver = DPLLSolver(convert(lines, verbose), verbose)
         assignments = solver.solve()
         if assignments:
-            print("\n".join([f"{k} = {str(v).lower()}" for k,v in sorted(assignments.items(), key=lambda x: x[0])]))
+            print(
+                "\n".join(
+                    [
+                        f"{k} = {str(v).lower()}"
+                        for k, v in sorted(assignments.items(), key=lambda x: x[0])
+                    ]
+                )
+            )
     else:
         raise Exception("Invalid Mode.")
