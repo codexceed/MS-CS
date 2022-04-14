@@ -17,7 +17,7 @@ class ParseRegex(Enum):
 
 def input_parser(
     input_text: str,
-) -> Tuple[Dict[str, int], Dict[str, Dict[str, Union[List[str], List[float]]]]]:
+) -> Tuple[Dict[str, int], Dict[str, Dict[str, Union[List[str], List[float], bool]]]]:
     """Parse input string for MDP.
 
     Args:
