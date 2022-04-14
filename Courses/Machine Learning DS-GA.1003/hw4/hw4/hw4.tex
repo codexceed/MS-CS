@@ -1,0 +1,192 @@
+\documentclass{article}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{enumitem}
+\usepackage{minted}
+\input{math_commands}
+
+\newcommand{\wipcom}[1]{\textcolor{red}{WIP: #1}}
+\newcommand{\sol}[1]{\textcolor{gray}{}}
+\newcommand{\nyuparagraph}[1]{\vspace{0.3cm}\textcolor{nyupurple}{\bf \large #1}\\}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\nll}{\rm NLL}
+
+\pagestyle{empty} \addtolength{\textwidth}{1.0in}
+\addtolength{\textheight}{0.5in} \addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{0.5in}
+\newcommand{\ruleskip}{\bigskip\hrule\bigskip}
+\newcommand{\nodify}[1]{{\sc #1}} \newcommand{\points}[1]{{\textbf{[#1
+points]}}}
+
+\newcommand{\bitem}{\begin{list}{$\bullet$}%
+{\setlength{\itemsep}{0pt}\setlength{\topsep}{0pt}%
+\setlength{\rightmargin}{0pt}}} \newcommand{\eitem}{\end{list}}
+
+\definecolor{nyupurple}{RGB}{134, 0, 179}
+\setlength{\parindent}{0pt} \setlength{\parskip}{0.5ex}
+
+\DeclareUnicodeCharacter{2212}{-}
+
+\theoremstyle{plain}
+\newtheorem*{thm*}{\protect\theoremname}
+\theoremstyle{definition}
+\newtheorem*{defn*}{\protect\definitionname}
+
+\begin{document}
+\newcounter{saveenum}
+
+\pagestyle{myheadings} \markboth{}{\color{nyupurple} DS-GA-1003 - Spring 2022}
+
+\begin{center}
+{\Large
+Homework 4: Probabilistic models
+} 
+\end{center}
+
+{
+{ \color{nyupurple} \textbf{Due:} Friday, March 25, 2022 at 11:59PM EST} 
+} 
+
+\textbf{Instructions: }Your answers to the questions below, including plots and mathematical
+ work, should be submitted as a single PDF file.  It's preferred that you write your answers using software that typesets mathematics (e.g.LaTeX, LyX, or MathJax via iPython), though if you need to you may scan handwritten work.  You may find the \href{https://github.com/gpoore/minted}{minted} package convenient for including source code in your LaTeX document.  If you are using LyX, then the \href{https://en.wikibooks.org/wiki/LaTeX/Source_Code_Listings}{listings} package tends to work better.
+
+\ruleskip
+
+\section{Logistic Regression}
+\label{sec:lr}
+Consider a binary classification setting with input
+space $\mathcal{X}=\mathbb{R}^{d}$, outcome space $\mathcal{Y}_{\pm}=\left\{ -1,1\right\} $,
+and a dataset $\mathcal{D}=\left((x^{(1)},y^{(1)}),\mathcal{D}ots,(x^{(n)},y^{(n)})\right)$.
+
+
+\nyuparagraph{\label{subsec:erm-bernoulli-setup}Equivalence of ERM and probabilistic
+approaches}
+In the lecture we derived logistic regression using the Bernoulli response distribution.
+In this problem you will show that it is equivalent to ERM with logistic loss.
+
+\textbf{ERM with logistic loss.}\\
+Consider a linear scoring function in the space $\mathcal{F}_{\text{score}}=\left\{ x\mapsto x^{T}w\mid w\in\mathbb{R}^{d}\right\} $.
+A simple way to make predictions (similar to what we've seen with the perceptron algorithm)
+is to predict $\hat{y}=1$ if $x^Tw > 0$, or $\hat{y} = \text{sign}(x^Tw)$.
+Accordingly, we consider margin-based loss functions that relate the loss with the margin, $yx^Tw$.
+A positive margin means that $x^Tw$ has the same sign as $y$, i.e. a correct prediction.
+Specifically, let's consider the \textbf{logistic loss} function $\ell_{\text{logistic}}(y, w)=\log\left(1+\exp(-yw^Tx)\right)$.
+This is a margin-based loss function that you have now encountered several times.
+%  and an upper bound of the 0-1 loss.
+Given the logistic loss, we can now minimize the empirical risk on our dataset $\mathcal{D}$ to obtain an estimate of the parameters, $\hat{w}$.
+
+\textbf{MLE with a Bernoulli response distribution and the logistic link function.}\\
+As discussed in the lecture, given that
+$p(y=1 \mid x; w) = 1 / (1 + \exp(-x^Tw))$,
+we can estimate $w$ by maximizing the likelihood, or equivalently,
+minimizing the negative log-likelihood ($\nll_{\mathcal{D}}(w)$~in short) of the data.
+
+\begin{enumerate}
+  \setcounter{enumi}{\value{saveenum}}
+  \item Show that the two approaches are equivalent, i.e. they will produce the same solution for $w$.
+\setcounter{saveenum}{\value{enumi}}
+\end{enumerate}
+\nyuparagraph{Linearly Separable Data}
+\label{sec:linear}
+In this problem, we will investigate the behavior of MLE for logistic regression when the data is linearly separable.
+
+\begin{enumerate}
+  \setcounter{enumi}{\value{saveenum}}
+\item Show that the decision boundary of logistic regression is given by $\left\{x\colon x^Tw=0\right\}$.
+Note that the set will not change if we multiply the weights by some constant $c$.
+\item Suppose the data is linearly separable and by gradient descent/ascent we have reached a decision boundary defined by $\hat{w}$ where all examples are classified correctly. 
+Show that we can always increase the likelihood of the data by multiplying a scalar $c$ on $\hat{w}$,
+which means that MLE is not well-defined in this case.
+{(Hint: You can show this by taking the derivative of $L(c\hat{w})$ with respect to $c$, where $L$ is the likelihood function.)}
+
+\setcounter{saveenum}{\value{enumi}}
+\end{enumerate}
+
+\nyuparagraph{\label{subsec:Regularized-Logistic-Regression}Regularized Logistic
+Regression}
+As we've shown in above, when the data is linearly separable,
+MLE for logistic regression may end up with weights with very large magnitudes. Such a function is prone to overfitting.
+In this part, we will apply regularization to fix the problem.
+
+The $\ell_2$ regularized
+logistic regression objective function can be defined as
+\begin{eqnarray*}
+J_{\text{logistic}}(w) & = & \hat{R}_{n}(w)+\lambda\|w\|^{2}\\
+ & = & \frac{1}{n}\sum_{i=1}^{n}\log\left(1+\exp\left(-y^{(i)}w^{T}x^{(i)}\right)\right)+\lambda\|w\|^{2}.
+\end{eqnarray*}
+ 
+\begin{enumerate}
+  \setcounter{enumi}{\value{saveenum}}
+\item Prove that the objective function $J_{\text{logistic}}(w)$ is convex.
+You may use any facts mentioned in the \href{https://davidrosenberg.github.io/mlcourse/Notes/convex-optimization.pdf}{convex optimization notes}.
+
+\item Complete the \texttt{f\_objective} function in the skeleton code,
+which computes the objective function for $J_{\text{logistic}}(w)$.
+(Hint: you may get numerical overflow when computing the exponential literally,
+e.g. try $e^{1000}$ in Numpy.
+Make sure to read about the
+\href{https://blog.feedly.com/tricks-of-the-trade-logsumexp/}{log-sum-exp trick}
+and use the numpy function
+\textit{ \href{https://docs.scipy.org/doc/numpy/reference/generated/numpy.logaddexp.html}{logaddexp}
+}
+to get accurate calculations
+and to prevent overflow.
+
+\item Complete the \texttt{fit\_logistic\_regression\_function} in the skeleton
+code using the \texttt{minimize} function from \texttt{scipy.optimize}.
+Use this function to train
+a model on the provided data. Make sure to take the appropriate preprocessing
+steps, such as standardizing the data and adding a column for the
+bias term. 
+
+\item Find the $\ell_{2}$ regularization parameter that minimizes the log-likelihood
+on the validation set. Plot the log-likelihood for different values
+of the regularization parameter. 
+
+\item {[}Optional{]} 
+It seems reasonable to interpret the prediction $f(x)=\phi(w^{T}x)=1/(1+e^{-w^{T}x})$
+as the probability that $y=1$, for a randomly drawn pair $\left(x,y\right)$.
+Since we only have a finite sample (and we are regularizing, which
+will bias things a bit) there is a question of how well ``\href{https://en.wikipedia.org/wiki/Calibration_(statistics)}{calibrated}''
+our predicted probabilities are. Roughly speaking, we say $f(x)$
+is well calibrated if we look at all examples $\left(x,y\right)$
+for which $f(x)\approx0.7$ and we find that close to $70\%$ of those
+examples have $y=1$, as predicted... and then we repeat that for
+all predicted probabilities in $\left(0,1\right)$. To see how well-calibrated
+our predicted probabilities are, break the predictions on the validation
+set into groups based on the predicted probability (you can play with
+the size of the groups to get a result you think is informative).
+For each group, examine the percentage of positive labels. You can
+make a table or graph. Summarize the results. You may get some ideas
+and references from \href{http://scikit-learn.org/stable/modules/calibration.html}{scikit-learn's discussion}. 
+\setcounter{saveenum}{\value{enumi}}
+\end{enumerate}
+\section{Coin Flipping with Partial Observability}
+Consider flipping a biased coin where $p(z=H\mid \theta_1) = \theta_1$.
+However, we cannot directly observe the result $z$.
+Instead, someone reports the result to us,
+which we denotey by $x$.
+Further, there is a chance that the result is reported incorrectly \emph{if it's a head}.
+Specifically, we have $p(x=H\mid z=H, \theta_2) = \theta_2$
+and $p(x=T\mid z=T) = 1$.
+
+\begin{enumerate}
+  \setcounter{enumi}{\value{saveenum}}
+\item Show that $p(x=H\mid \theta_1, \theta_2) = \theta_1 \theta_2$.
+
+
+\item Given a set of reported results $\mathcal{D}_r$ of size $N_r$, where the number of heads is $n_h$ and the number of tails is $n_t$, what is the likelihood of $\mathcal{D}_r$ as a function of $\theta_1$ and $\theta_2$.
+
+
+\item Can we estimate $\theta_1$ and $\theta_2$ using MLE? Explain your judgment.
+
+
+\setcounter{saveenum}{\value{enumi}}
+\end{enumerate}
+\end{document}
