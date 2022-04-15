@@ -16,7 +16,9 @@ class DPLLSolver:
         self.letters = sorted(letter_count)
 
     @staticmethod
-    def next(letters: List[str], idx: int, clauses: List[str]) -> Tuple[int, str, str, bool]:
+    def next(
+        letters: List[str], idx: int, clauses: List[str]
+    ) -> Tuple[int, str, str, bool]:
         """Find the next letter to assign values to.
 
         Args:
@@ -42,9 +44,9 @@ class DPLLSolver:
             rel_sentences = [sen for sen in clauses if letter in sen]
 
             # Check if the letter appears in a consistent boolean sign
-            if all([re.match(fr".*\!{letter}.*", sen) for sen in rel_sentences]):
+            if all([re.match(rf".*\!{letter}.*", sen) for sen in rel_sentences]):
                 pure_count.append((i, len(rel_sentences), True))
-            elif all([not re.match(fr".*\!{letter}.*", sen) for sen in rel_sentences]):
+            elif all([not re.match(rf".*\!{letter}.*", sen) for sen in rel_sentences]):
                 pure_count.append((i, len(rel_sentences), False))
 
         if pure_count:
@@ -122,7 +124,9 @@ class DPLLSolver:
                             true_clauses.append(clause)
                         elif "!" + letter in clause:
                             true_clauses.append(
-                                re.sub(r"\s+", " ", clause.replace("!" + letter, "")).strip()
+                                re.sub(
+                                    r"\s+", " ", clause.replace("!" + letter, "")
+                                ).strip()
                             )  # Remove not occurrences
 
                     if self.debug:

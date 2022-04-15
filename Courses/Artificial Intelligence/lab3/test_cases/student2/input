@@ -1,0 +1,18 @@
+# Student MDP from DeepMind talk
+
+Class1 : [Study1, FB]
+Study1=-2
+Study1 : [Class2]
+Class2 : [Sleep, Study2]
+Study2=-2
+Study2 : [Class3]
+Sleep=0
+Class3 : [Pass, Pub]
+Pass=10
+Drink: [Class1, Class2, Class3]
+Drink% .2 .4 .4
+Pub=1
+Pub : [Drink]
+FB=-1
+FB : [Internet]
+Internet : [Class1, FB]

@@ -1,0 +1,16 @@
+# From http://www.cs.cmu.edu/~cga/ai-course/mdp.pdf
+# use -df of 0.9
+
+Assist=20
+Assist : [Assist, Assoc, Street]
+Assist % .6 .2 .2
+Assoc=60
+Assoc : [Assoc, Tenure, Street]
+Assoc % .6 .2 .2
+Tenure=400
+Tenure : [Tenure, Dead]
+Tenure % .7 .3
+Street=10
+Street : [Street, Dead]
+Street % .7 .3
+Dead=0

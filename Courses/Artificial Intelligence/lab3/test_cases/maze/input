@@ -1,0 +1,18 @@
+# maze example from class slides
+
+Z=1
+Y=-1
+A : [Z, C, Y]
+A % .8
+B : [Z, C, E]
+B % .8
+C : [A, B, D, F]
+C % .8
+D : [C, Y, G]
+D % .8
+E : [F, B]
+E % .8
+F : [E, C, G]
+F % .8
+G : [D, F]
+G % .8

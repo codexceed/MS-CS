@@ -48,18 +48,18 @@ def tokenize(s: str) -> List[str]:
                 continue
             elif re.match(r"[A-Z]", c):
                 k = i + 1
-                for j in range(i+1, len(s)):
+                for j in range(i + 1, len(s)):
                     k += 1
                     if not re.match(r"[A-Z_]", s[j]):
                         break
                 tokens.append(s[i:k])
-                i = k-1
+                i = k - 1
             else:
                 tokens.append(c)
-        elif s[i: i + 3] == "<=>":
+        elif s[i : i + 3] == "<=>":
             tokens.append("<=>")
             i += 2
-        elif s[i:i + 2] == "=>":
+        elif s[i : i + 2] == "=>":
             tokens.append("=>")
             i += 1
 
@@ -160,7 +160,9 @@ def remove_multiple_parenthesis(statement: str) -> str:
             while True:
                 if statement[left] == "(":
                     right = find_corresponding_parenthesis(statement, left)
-                    if not re.match(r"^\s*$", statement[right:rm_right[-1] - 1]):  # Only redundant if there's nothing b/w this and previous paren
+                    if not re.match(
+                        r"^\s*$", statement[right : rm_right[-1] - 1]
+                    ):  # Only redundant if there's nothing b/w this and previous paren
                         break
 
                     rm_left.append(left)
@@ -170,7 +172,7 @@ def remove_multiple_parenthesis(statement: str) -> str:
 
                 left += 1
 
-            fixed = statement[rm_left[-1]:rm_right[-1]]
+            fixed = statement[rm_left[-1] : rm_right[-1]]
             fixed = f"({remove_multiple_parenthesis(fixed[1:-1])})"  # Handle internal parenthesis
             fixed = statement[:i] + fixed
             statement = fixed + statement[j:]  # Remove redundant parenthesis
@@ -299,7 +301,7 @@ def demorgan_resolve(statement: str) -> str:
                 tokens = tokens[: i - 1] + [resolved] + tokens[i + 1 :]
                 i -= 1
             else:
-                tokens = tokens[:i] + [resolved] + tokens[i + 1:]
+                tokens = tokens[:i] + [resolved] + tokens[i + 1 :]
 
         i += 1
 
@@ -368,13 +370,19 @@ def distribute_ors(statement: str) -> str:
                         left = f"!{tokens[i-1]}"
                         left_idx = i - 2
 
-                    and_tokens = tokenize(remove_redundant_parenthesis(tokens[i + 1])[1:-1])
+                    and_tokens = tokenize(
+                        remove_redundant_parenthesis(tokens[i + 1])[1:-1]
+                    )
                     and_idx = and_tokens.index("&")
 
-                    right_a, right_b = "".join(and_tokens[:and_idx]), "".join(and_tokens[and_idx + 1:])
+                    right_a, right_b = "".join(and_tokens[:and_idx]), "".join(
+                        and_tokens[and_idx + 1 :]
+                    )
                     tokens[left_idx] = "(" + distribute_ors(f"{left} | {right_a}") + ")"
                     tokens[left_idx + 1] = "&"
-                    tokens[left_idx + 2] = "(" + distribute_ors(f"{left} | {right_b}") + ")"
+                    tokens[left_idx + 2] = (
+                        "(" + distribute_ors(f"{left} | {right_b}") + ")"
+                    )
                     tokens = tokens[: left_idx + 3] + tokens[i + 2 :]
                     i = -1
 
@@ -387,14 +395,18 @@ def distribute_ors(statement: str) -> str:
                         right_idx += 1
                         right = f"!{tokens[right_idx]}"
 
-                    and_tokens = tokenize(remove_redundant_parenthesis(tokens[i - 1])[1:-1])
+                    and_tokens = tokenize(
+                        remove_redundant_parenthesis(tokens[i - 1])[1:-1]
+                    )
                     and_idx = and_tokens.index("&")
 
-                    left_a, left_b = "".join(and_tokens[:and_idx]), "".join(and_tokens[and_idx + 1:])
+                    left_a, left_b = "".join(and_tokens[:and_idx]), "".join(
+                        and_tokens[and_idx + 1 :]
+                    )
                     tokens[i - 1] = "(" + distribute_ors(f"{left_a} | {right}") + ")"
                     tokens[i] = "&"
                     tokens[i + 1] = "(" + distribute_ors(f"{left_b} | {right}") + ")"
-                    tokens = tokens[:i + 2] + tokens[right_idx + 1:]
+                    tokens = tokens[: i + 2] + tokens[right_idx + 1 :]
                     i = -1
 
             i += 1
