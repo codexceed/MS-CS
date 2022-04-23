@@ -1,0 +1,222 @@
+\documentclass{article}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{enumitem}
+\usepackage{minted}
+\input{math_commands}
+
+\newcommand{\wipcom}[1]{\textcolor{red}{WIP: #1}}
+\newcommand{\sol}[1]{\textcolor{gray}{sol: #1}}
+% \newcommand{\sol}[1]{}
+\newcommand{\nyuparagraph}[1]{\vspace{0.3cm}\textcolor{nyupurple}{\bf \large #1}\\}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\nll}{\rm NLL}
+
+\pagestyle{empty} \addtolength{\textwidth}{1.0in}
+\addtolength{\textheight}{0.5in} \addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{0.5in}
+\newcommand{\ruleskip}{\bigskip\hrule\bigskip}
+\newcommand{\nodify}[1]{{\sc #1}} \newcommand{\points}[1]{{\textbf{[#1
+points]}}}
+
+\newcommand{\bitem}{\begin{list}{$\bullet$}%
+{\setlength{\itemsep}{0pt}\setlength{\topsep}{0pt}%
+\setlength{\rightmargin}{0pt}}} \newcommand{\eitem}{\end{list}}
+
+\definecolor{nyupurple}{RGB}{134, 0, 179}
+\setlength{\parindent}{0pt} \setlength{\parskip}{0.5ex}
+
+\DeclareUnicodeCharacter{2212}{-}
+
+\theoremstyle{plain}
+\newtheorem*{thm*}{\protect\theoremname}
+\theoremstyle{definition}
+\newtheorem*{defn*}{\protect\definitionname}
+
+\begin{document}
+\newcounter{saveenum}
+
+\pagestyle{myheadings} \markboth{}{\color{nyupurple} DS-GA-1003 - Spring 2022}
+
+\begin{center}
+{\Large
+Homework 6: Decision Trees and Boosting
+} 
+\end{center}
+
+{
+{ \color{nyupurple} \textbf{Due:} Friday, April 22nd, 2022 at 11:59PM EST} 
+} 
+
+\textbf{Instructions: }Your answers to the questions below, including plots and mathematical work, should be submitted as a single PDF file.  It's preferred that you write your answers using software that typesets mathematics (e.g.LaTeX, LyX, or MathJax via iPython), though if you need to you may scan handwritten work.  You may find the \href{https://github.com/gpoore/minted}{minted} package convenient for including source code in your LaTeX document.  If you are using LyX, then the \href{https://en.wikibooks.org/wiki/LaTeX/Source_Code_Listings}{listings} package tends to work better. {\bf The optional problems should not take you too much time and help you navigate the material, consider taking a shot at them.}
+
+\ruleskip
+
+
+% \pagestyle{fancy} \lhead{\includegraphics[width=4cm]{../figures/logo.PNG}} \rhead{}
+
+
+\section{Decision Tree Implementation}
+
+In this problem we'll implement decision trees for both classification
+and regression. The strategy will be to implement a generic class,
+called \texttt{Decision\_Tree}, which we'll supply with the loss function
+we want to use to make node splitting decisions, as well as the estimator
+we'll use to come up with the prediction associated with each leaf
+node. For classification, this prediction could be a vector of probabilities,
+but for simplicity we'll just consider hard classifications here.
+We'll work with the classification and regression data sets from previous
+assignments.
+\begin{enumerate}
+\setcounter{enumi}{\value{saveenum}}
+\item Complete the \texttt{compute\_entropy} and \texttt{compute\_gini}
+functions.\\
+
+
+\item Complete the class \texttt{Decision\_Tree}, given in
+the skeleton code. The intended implementation is as follows: Each
+object of type \texttt{Decision\_Tree} represents a single node of
+the tree. The depth of that node is represented by the variable self.depth,
+with the root node having depth 0. The main job of the fit function
+is to decide, given the data provided, how to split the node or whether
+it should remain a leaf node. If the node will split, then the splitting
+feature and splitting value are recorded, and the left and right subtrees
+are fit on the relevant portions of the data. Thus tree-building is
+a recursive procedure. We should have as many \texttt{Decision\_Tree}
+objects as there are nodes in the tree. We will not implement pruning\textbf{
+}here. Some additional details are given in the skeleton code.\\
+
+
+\item Run the code provided that builds trees for the two-dimensional
+classification data. Include the results. For debugging, you may want
+to compare results with sklearn's decision tree (code provided in the skeleton code). For visualization,
+you'll need to install \texttt{graphviz}.\\
+
+\item  Complete the function \texttt{mean\_absolute\_deviation\_around\_median}
+(MAE). Use the code provided to fit the \texttt{Regression\_Tree} to
+the krr dataset using both the MAE loss and median predictions. Include
+the plots for the 6 fits.\\
+
+\setcounter{saveenum}{\value{enumi}}
+\end{enumerate}
+
+\section{Ensembling}
+
+Recall the general gradient boosting algorithm
+% \footnote{Besides the lecture slides, you can find an accessible discussion
+% of this approach in \url{http://www.saedsayad.com/docs/gbm2.pdf},
+% in one of the original references \url{http://statweb.stanford.edu/~jhf/ftp/trebst.pdf},
+% and in this review paper \url{http://web.stanford.edu/~hastie/Papers/buehlmann.pdf}. }
+, for a given loss function $\ell$ and a hypothesis space $\cf$
+of regression functions (i.e. functions mapping from the input space
+to $\reals$): 
+\begin{enumerate}
+\setcounter{enumi}{\value{saveenum}}
+\item[0:] Initialize $f_{0}(x)=0$. 
+\item[1:] For $m=1$ to $M$:
+
+\begin{enumerate}
+\item Compute: 
+\[
+{\bf g}_{m}=\left( \frac{\partial}{\partial f_{m-1}(x_{j})}\sum_{i=1}^{n}\ell\left(y_{i},f_{m-1}(x_{i})\right)\right)_{j=1}^{n}
+\]
+\item Fit regression model to $-{\bf g}_{m}$: 
+\[
+h_{m}=\argmin_{h\in\cf}\sum_{i=1}^{n}\left(\left(-{\bf g}_{m}\right)_{i}-h(x_{i})\right)^{2}.
+\]
+\item Choose fixed step size $\nu_{m}=\nu\in(0,1]$, or take 
+\[
+\nu_{m}=\argmin_{\nu>0}\sum_{i=1}^{n}\ell\left(y_{i},f_{m-1}(x_{i})+\nu h_{m}(x_{i})\right).
+\]
+\item Take the step: 
+\[
+f_{m}(x)=f_{m-1}(x)+\nu_{m}h_{m}(x)
+\]
+\end{enumerate}
+\item[3:] Return $f_{M}$. 
+\end{enumerate}
+
+
+This method goes by many names, including gradient boosting machines
+(GBM), generalized boosting models (GBM), AnyBoost, and gradient boosted
+regression trees (GBRT), among others. One of the nice aspects
+of gradient boosting is that it can be applied to any problem with
+a subdifferentiable loss function.
+
+
+\nyuparagraph{Gradient Boosting Regression Implementation}
+First we'll keep things simple and consider the standard regression setting with square loss. In this case the we have $\cy=\reals$, our
+loss function is given by $
+\ell(\hat{y},y)=1/2\left(\hat{y}-y\right)^{2}$,
+and at the $m$'th round of gradient boosting, we
+have
+\[
+h_{m}=\argmin_{h\in\cf}\sum_{i=1}^{n}\left[\left(y_{i}-f_{m-1}(x_{i})\right)-h(x_{i})\right]^{2}.
+\]
+
+\begin{enumerate}
+\setcounter{enumi}{\value{saveenum}}
+  
+\item Complete the \texttt{gradient\_boosting} class. As the base regression
+algorithm to compute the argmin, you should use sklearn's regression tree. You should use
+the square loss for the tree splitting rule (\texttt{criterion} keyword argument) and use the default sklearn leaf prediction rule from the \texttt{predict} method \footnote{Examples of usage are given in the skeleton code to debug previous problems, and you can check the docs \url{https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeRegressor.html}}. We will also use a constant step size $\nu$.\\
+
+
+\item Run the code provided to build gradient
+boosting models on the regression data sets \texttt{krr-train.txt}, and
+include the plots generated. For debugging you can use the sklearn implementation of \texttt{GradientBoostingRegressor}\footnote{\url{https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.GradientBoostingRegressor.html}}.
+\setcounter{saveenum}{\value{enumi}}\\
+
+
+\end{enumerate}
+
+\nyuparagraph{Classification of images with Gradient Boosting}
+In this problem we will consider the classification of MNIST, the dataset of handwritten digits images, with ensembles of trees. For simplicity, we only retain the `0' and '1' examples and perform binary classification.
+
+First we'll derive a special case of the general gradient
+boosting framework: BinomialBoost. 
+Let's consider the classification framework, where $\cy=\left\{ -1,1\right\} $.
+In lecture, we noted that AdaBoost corresponds to forward stagewise
+additive modeling with the exponential loss, and that the exponential
+loss is not very robust to outliers (i.e. outliers can have a large
+effect on the final prediction function). Instead, let's consider
+the logistic loss 
+\[
+\ell(m)=\ln\left(1+e^{-m}\right),
+\]
+where $m=yf(x)$ is the margin.
+
+\begin{enumerate}
+  \setcounter{enumi}{\value{saveenum}}
+  
+\item Give the expression of the negative gradient step direction, or pseudo residual, $-{\bf g}_{m}$ for the logistic loss as a function of the prediction function $f_{m-1}$ at the previous iteration and the dataset points $\{(x_i, y_i)\}_{i=1}^n$. What is the dimension of $g_{m}$?\\
+
+\item Write an expression for $h_{m}$ as an argmin over functions $h$ in $\cf$.\\
+
+  
+\item Load the MNIST dataset using the helper preprocessing function in the skeleton code.Using the scikit learn implementation of \texttt{GradientBoostingClassifier}, with the logistic loss (\texttt{loss=`deviance'}) and trees of maximum depth 3, fit the data with 2, 5, 10, 100 and 200 iterations (estimators). Plot the train and test accurary as a function of the number of estimators.\\
+
+
+\setcounter{saveenum}{\value{enumi}}
+\end{enumerate}
+
+\nyuparagraph{Classification of images with Random Forests (Optional)}
+\begin{enumerate}
+  \setcounter{enumi}{\value{saveenum}}
+\item Another type of ensembling method we discussed in class are random forests. Explain in your own words the construction principle of random forests.\\
+
+\item Using the scikit learn implementation of \texttt{RandomForestClassifier}\footnote{\url{https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html\#sklearn.ensemble.RandomForestClassifier}},
+with the entropy loss (\texttt{criterion=`entropy'}) and trees of maximum depth 3, fit the preprocessed binary MNIST dataset with 2, 5, 10, 50, 100 and 200 estimators.\\
+
+\item What general remark can you make on overfitting for Random Forests and Gradient Boosted Trees? Which method achieves the best train accuracy overall? Is this result expected? 
+Can you think of a practical disadvantage of the best performing method? How do the algorithms compare in term of test accuracy? \\
+\setcounter{saveenum}{\value{enumi}}
+\end{enumerate}
+
+\end{document}
