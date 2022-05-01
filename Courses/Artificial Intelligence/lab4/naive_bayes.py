@@ -1,2 +1,0 @@
-class NaiveBayesClassifier:
-    pass

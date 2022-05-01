@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-
 from argparse import ArgumentParser
 from typing import Tuple, List
 
-from knn import KNNClassifier
-from naive_bayes import NaiveBayesClassifier
+from classifiers import KNNClassifier, NaiveBayesClassifier
 
 
 def print_metrics(test: List[str], predicted: List[str], labels: List[str]) -> None:
@@ -42,6 +40,9 @@ def parse_csv(file: str) -> Tuple[List[Tuple[int]], List[str]]:
     with open(file, "r") as f:
         for line in f:
             tokens = line.strip("\n").split(",")
+            if len(tokens) < 2:
+                break
+
             points.append(tuple(map(int, tokens[:-1])))
             labels.append(tokens[-1])
 
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     training_pts, labels = parse_csv(train_file)
 
     # Train/Setup Classifier
-    classifier = classifier_cls(training_pts, labels)
+    classifier = classifier_cls(training_pts, labels, verbose)
 
     # Test classifier
     test_points, test_labels = parse_csv(test_file)
@@ -102,6 +103,13 @@ if __name__ == "__main__":
         # Predict label
         predictions.append(classifier.classify(point, clf_param))
         if verbose:
-            print(f"want={test_labels[i]} got={predictions[i]}")
+            if isinstance(classifier, KNNClassifier):
+                print(f"want={test_labels[i]} got={predictions[i]}")
+
+            elif isinstance(classifier, NaiveBayesClassifier):
+                if test_labels[i] == predictions[i]:
+                    print(f'match: "{test_labels[i]}"')
+                else:
+                    print(f'fail: got "{predictions[i]}" != want "{test_labels[i]}"')
 
     print_metrics(test_labels, predictions, classifier.unique_labels)

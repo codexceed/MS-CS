@@ -1,0 +1,24 @@
+P(C=F) = [1 / 4]
+P(A0=1 | C=F) = 1 / 1
+P(A1=2 | C=F) = 1 / 1
+P(A2=2 | C=F) = 0 / 1
+P(C=T) = [3 / 4]
+P(A0=1 | C=T) = 1 / 3
+P(A1=2 | C=T) = 1 / 3
+P(A2=2 | C=T) = 1 / 3
+NB(C=F) = 0.000000
+NB(C=T) = 0.027778
+fail: got "T" != want "F"
+P(C=F) = [1 / 4]
+P(A0=2 | C=F) = 0 / 1
+P(A1=1 | C=F) = 0 / 1
+P(A2=2 | C=F) = 0 / 1
+P(C=T) = [3 / 4]
+P(A0=2 | C=T) = 2 / 3
+P(A1=1 | C=T) = 2 / 3
+P(A2=2 | C=T) = 1 / 3
+NB(C=F) = 0.000000
+NB(C=T) = 0.111111
+match: "T"
+Label=F Precision=0/0 Recall=0/1
+Label=T Precision=1/2 Recall=1/1
