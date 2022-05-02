@@ -23,6 +23,7 @@ class ClassifierBase(ABC):
         self.points = points
         self.labels = labels
         self.verbose = verbose
+        self.unique_labels = sorted(list(set(self.labels)))
 
     @abstractmethod
     def classify(self, features: Tuple[int], *args) -> str:
@@ -35,7 +36,6 @@ class NaiveBayesClassifier(ClassifierBase):
     ):
         super().__init__(points, labels, verbose)
         self.data_zip = list(zip(self.points, self.labels))
-        self.unique_labels = sorted(list(set(self.labels)))
         self.unique_feature_vals = []
         for i in range(len(self.points[0])):
             self.unique_feature_vals.append(sorted(list(set([x[i] for x in self.points]))))
@@ -61,12 +61,11 @@ class NaiveBayesClassifier(ClassifierBase):
 
             if self.verbose:
                 print(
-                    f"P(C={label}) = [{n_label + laplacian} / {len(self.labels) + len(self.unique_labels) * laplacian}]"
+                    f"P(C={label}) = [{n_label} / {len(self.labels)}]"
                 )
 
-            prob_label = (n_label + laplacian) / (
-                len(self.labels) + len(self.unique_labels) * laplacian
-            )
+            # No Laplacian for label (class) probability to conform to assignment convention
+            prob_label = n_label / len(self.labels)
 
             # Feature probabilities
             feature_probs = []
@@ -85,7 +84,7 @@ class NaiveBayesClassifier(ClassifierBase):
 
                 if self.verbose:
                     print(
-                        f"P(A{i}={feature} | C={feature}) = {n_joint + laplacian} / {n_base + unique_feature_vals * laplacian}"
+                        f"P(A{i}={feature} | C={label}) = {n_joint + laplacian} / {n_base + unique_feature_vals * laplacian}"
                     )
 
                 feature_probs.append(
@@ -98,7 +97,7 @@ class NaiveBayesClassifier(ClassifierBase):
             )
 
             if self.verbose:
-                print(f"NB(C={label}) = {conditional_prob}")
+                print(f"NB(C={label}) = {conditional_prob:.6f}")
 
             # Pick the label with highest probability
             if conditional_prob > max_prob:
