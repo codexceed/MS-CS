@@ -1,0 +1,9 @@
+want=A got=A
+want=B got=A
+want=A got=C
+want=A got=A
+want=B got=B
+want=B got=B
+Label=A Precision=2/3 Recall=2/3
+Label=B Precision=2/2 Recall=2/3
+Label=C Precision=0/1 Recall=0/0
