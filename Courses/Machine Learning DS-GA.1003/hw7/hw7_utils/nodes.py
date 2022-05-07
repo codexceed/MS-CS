@@ -25,7 +25,7 @@ License: Creative Commons Attribution 4.0 International License
 """
 
 import numpy as np
-
+from scipy.special import softmax
 
 class ValueNode(object):
     """Computation graph node having no input but simply holding a value"""
@@ -172,13 +172,6 @@ class SumNode(object):
 
 
 class AffineNode(object):
-    """Node implementing affine transformation (W,x,b)-->Wx+b, where W is a matrix,
-    and x and b are vectors
-        Parameters:
-        W: node for which W.out is a numpy array of shape (m,d)
-        x: node for which x.out is a numpy array of shape (d)
-        b: node for which b.out is a numpy array of shape (m) (i.e. vector of length m)
-    """
 
     def __init__(self, W, x, b, node_name):
         """Node implementing affine transformation (W,x,b)-->Wx+b, where W is a matrix,
@@ -198,7 +191,7 @@ class AffineNode(object):
         self.b = b
 
     def forward(self):
-        self.out = (self.W.out @ self.x.out) + self.b.out
+        self.out = ((self.W.out @ self.x.out) + self.b.out)
         self.d_out = np.zeros(self.out.shape)
         return self.out
 
@@ -248,7 +241,24 @@ class SoftmaxNode(object):
         Parameters:
         z: node for which z.out is a numpy array
     """
-    pass
+    def __init__(self, z, node_name):
+        """Node tanh(a), where tanh is applied elementwise to the array a
+        Parameters:
+        a: node for which a.out is a numpy array
+        node_name: node's name (a string)
+        """
+        self.out = None
+        self.d_out = None
+        self.z = z
+        self.node_name = node_name
+
+    def forward(self):
+        self.out = softmax(self.z)
+        self.d_out = np.zeros(self.out.shape)
+
+        return self.out
+
+    def backward(self):
 
 
 class NLLNode(object):
