@@ -1,11 +1,14 @@
+#!/usr/bin/env python
 import re
 from argparse import ArgumentParser
 from typing import Tuple
+from datetime import datetime
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Integer, Date, Float
 from sqlalchemy.orm import sessionmaker
 
-from db.schema import *
+from constants.env import DB_PATH
+from db.schema import Production, NDVI, Moisture, Temperature, Precipitation, Base
 
 
 class Action:
@@ -58,32 +61,43 @@ if __name__ == "__main__":
         raise Exception(f"Specified schema not found: {table_name}")
 
     # Get query arguments
-    columns = [
-        attrib
-        for attrib in target_schema.__dir__()
-        if "_" not in attrib and attrib not in ["metadata", "registry"]
-    ]
+    valid_column_types = {attrib.name: type(attrib.type) for attrib in target_schema.__table__._columns}
     query_args = {}
     print(
         f"For {action} action on table {table_name}, please provide the following arguments:"
     )
     if action == Action.insert:
-        for col in columns:
+        for col in valid_column_types.keys():
             query_args[col] = input(f"{col}=")
     else:
         filter_str = input(
-            f"Please specify row filter in the format: 'column1=value1 column2=value2'"
+            f"Please specify row filter in the format: 'column1=value1 column2=value2'. Dates should be formatted 'dd/mm/yyyy HH:MM:SS'"
         )
-        query_args = {
-            col.strip(): val.strip()
-            for col, val in [
-                arg_pair.split("=")
-                for arg_pair in re.findall(r"\w+\s*=\s*\w+", filter_str)
-            ]
-        }
+        for col, val in [
+            arg_pair.split("=") for arg_pair in re.findall(r"\w+\s*=\s*\w+", filter_str)
+        ]:
+            if col not in valid_column_types.keys():
+                raise Exception(
+                    f"Column {col.strip()} not present in table {table_name}"
+                )
+            query_args[col.strip()] = val.strip()
+
+    # Preprocess values
+    for col, val in query_args.items():
+        if valid_column_types[col] == Integer:
+            query_args[col] = int(query_args[col])
+        elif valid_column_types[col] == Float:
+            query_args[col] = float(query_args[col])
+        elif valid_column_types[col] == Date:
+            try:
+                query_args[col] = datetime.strptime(query_args[col], "%d/%m/%Y %H:%M:%S")
+            except ValueError:
+                query_args[col] = datetime.strptime(query_args[col], "%d/%m/%Y")
+        else:
+            raise Exception(f"Unsupported value type for column {col}.")
 
     # Create a session and execute the query
-    engine = create_engine("sqlite:///../db/grople.db", echo=True)
+    engine = create_engine(f"sqlite:///{DB_PATH}", echo=True)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
 

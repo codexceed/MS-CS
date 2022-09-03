@@ -1,33 +1,33 @@
 #!/usr/bin/env python
-
 from datetime import timedelta
 
 import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from ..db.schema import (
-    Base,
-    Production,
-    DataPoints,
+from constants.env import DB_PATH
+from db.schema import (
     NDVI,
+    Base,
+    DataPoints,
     Moisture,
-    Temperature,
     Precipitation,
+    Production,
+    Temperature,
 )
-from sqlalchemy import create_engine
-
 
 if __name__ == "__main__":
-    engine = create_engine("sqlite:///../db/grople.db", echo=True)
+    engine = create_engine(f"sqlite:///{DB_PATH}", echo=True)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
 
     # Load csvs
-    production_df = pd.read_csv("../csvs/Production Quantity.csv")
-    ndvi_df = pd.read_csv("../csvs/Eight Day NDVI.csv")
-    moisture_df = pd.read_csv("../csvs/Daily Soil Moisture.csv")
-    temperature_df = pd.read_csv("../csvs/Daily Temperature.csv")
-    precipitation_df = pd.read_csv("../csvs/Daily Precipitation.csv")
+    production_df = pd.read_csv("csvs/Production Quantity.csv")
+    ndvi_df = pd.read_csv("csvs/Eight Day NDVI.csv")
+    moisture_df = pd.read_csv("csvs/Daily Soil Moisture.csv")
+    temperature_df = pd.read_csv("csvs/Daily Temperature.csv")
+    precipitation_df = pd.read_csv("csvs/Daily Precipitation.csv")
     all_dfs = [production_df, ndvi_df, moisture_df, temperature_df, precipitation_df]
 
     # Process data
