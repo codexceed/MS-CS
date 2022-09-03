@@ -17,6 +17,18 @@ from db.schema import (
     Temperature,
 )
 
+
+def safe_insert(df, schema_class, Session):
+    with Session() as session:
+        for _, row in df.iterrows():
+            try:
+                session.add(schema_class(**row))
+                session.commit()
+            except IntegrityError as e:
+                session.rollback()
+                print(f"Insertion exeption: {e}\nIgnoring insertion.")
+
+
 if __name__ == "__main__":
     engine = create_engine(f"sqlite:///{DB_PATH}", echo=True)
     Base.metadata.create_all(engine)
@@ -60,11 +72,8 @@ if __name__ == "__main__":
     data_points_df.to_sql(
         DataPoints.__tablename__, engine, if_exists="append", index=False
     )
-    ndvi_df.to_sql(NDVI.__tablename__, engine, if_exists="append", index=False)
-    moisture_df.to_sql(Moisture.__tablename__, engine, if_exists="append", index=False)
-    temperature_df.to_sql(
-        Temperature.__tablename__, engine, if_exists="append", index=False
-    )
-    precipitation_df.to_sql(
-        Precipitation.__tablename__, engine, if_exists="append", index=False
-    )
+
+    safe_insert(ndvi_df, NDVI, Session)
+    safe_insert(moisture_df, Moisture, Session)
+    safe_insert(temperature_df, Temperature, Session)
+    safe_insert(precipitation_df, Precipitation, Session)

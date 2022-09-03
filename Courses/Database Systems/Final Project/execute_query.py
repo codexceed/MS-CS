@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 import re
 from argparse import ArgumentParser
-from typing import Tuple
 from datetime import datetime
+from typing import Tuple
 
-from sqlalchemy import create_engine, Integer, Date, Float
+from sqlalchemy import Date, Float, Integer, create_engine
 from sqlalchemy.orm import sessionmaker
 
 from constants.env import DB_PATH
-from db.schema import Production, NDVI, Moisture, Temperature, Precipitation, Base
+from db.schema import NDVI, Base, Moisture, Precipitation, Production, Temperature
 
 
 class Action:
@@ -61,7 +61,9 @@ if __name__ == "__main__":
         raise Exception(f"Specified schema not found: {table_name}")
 
     # Get query arguments
-    valid_column_types = {attrib.name: type(attrib.type) for attrib in target_schema.__table__._columns}
+    valid_column_types = {
+        attrib.name: type(attrib.type) for attrib in target_schema.__table__._columns
+    }
     query_args = {}
     print(
         f"For {action} action on table {table_name}, please provide the following arguments:"
@@ -71,7 +73,8 @@ if __name__ == "__main__":
             query_args[col] = input(f"{col}=")
     else:
         filter_str = input(
-            f"Please specify row filter in the format: 'column1=value1 column2=value2'. Dates should be formatted 'dd/mm/yyyy HH:MM:SS'"
+            f"Please specify row filter in the format: 'column1=value1 column2=value2'. Dates should be formatted "
+            f"'dd/mm/yyyy HH:MM:SS' "
         )
         for col, val in [
             arg_pair.split("=") for arg_pair in re.findall(r"\w+\s*=\s*\w+", filter_str)
@@ -90,7 +93,9 @@ if __name__ == "__main__":
             query_args[col] = float(query_args[col])
         elif valid_column_types[col] == Date:
             try:
-                query_args[col] = datetime.strptime(query_args[col], "%d/%m/%Y %H:%M:%S")
+                query_args[col] = datetime.strptime(
+                    query_args[col], "%d/%m/%Y %H:%M:%S"
+                )
             except ValueError:
                 query_args[col] = datetime.strptime(query_args[col], "%d/%m/%Y")
         else:
