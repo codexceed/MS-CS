@@ -19,6 +19,7 @@ from the fruits after they have been harvested.
 ```shell
 python setup_db.py
 ```
+This sets up the initial state of the DB with some default data for grople syrup production.
 ### Execute queries on the Grople DB
 Use the `execute_query.py` script to perform SQL queries on Grople DB like as follows
 ```shell
@@ -63,3 +64,40 @@ MSE: 135.66202606659385
 - The latest model is automatically persists in the `models` directory with a timestamp in its name.
 - All the data in the grople database is used for the modeling process, and it's 10% of the data is reserved for evaluation.
 ### Predicting grople syrup production
+```shell
+$ python execute_inference.py
+Grople Production Predictor
+Enter model filename (enter nothing for latest model):
+Please enter a valid path to your input files:csvs
+Name of file containing precipitation data (enter nothing for default name):
+Name of file containing moisture data (enter nothing for default name):
+Name of file containing temperature data (enter nothing for default name):
+Name of file containing NDVI data (enter nothing for default name):
+Name of file containing production input (enter nothing for default name):
+Please enter a valid csv prediction output file path:predictions/out1.csv
+C:\Users\perfe\PycharmProjects\test\MS-CS\Courses\Database Systems\Final Project\venv\lib\site-packages\pandas\core\algorithms.py:798: FutureWarning: In a future version, the Index constructor will not infer numeric dtypes when pas
+sed object-dtype sequences (matching Series behavior)
+  uniques = Index(uniques)
+```
+- In order to perform inference, we need to provide input data for all production factors (precipitation, temperature, moisture, etc) and the target months and region. This is done via csv files for each of the prediction factors, all of which need to be located at the same path. In this case, the `csvs` directory already contains some testing input so we use the same.
+- The file names for input data can be ignored if we're using the default `csvs` input path.
+- The output is in the form of a csv, with production values populated alongside the months and regions specified in the input. Please specify the exact full path to the output csv file, including the file name.
+
+The output looks like as follows
+```shell
+$ head -10 predictions/out1.csv
+start_date,end_date,prod,region_id
+2021-01-01T00:00:00.000Z,2021-01-31T00:00:00.000Z,198359.16317463852,93
+2021-02-01T00:00:00.000Z,2021-02-28T00:00:00.000Z,222003.8052636264,93
+2021-03-01T00:00:00.000Z,2021-03-31T00:00:00.000Z,244018.29270226147,93
+2021-04-01T00:00:00.000Z,2021-04-30T00:00:00.000Z,272363.70633147896,93
+2021-05-01T00:00:00.000Z,2021-05-31T00:00:00.000Z,260506.67135483894,93
+2021-06-01T00:00:00.000Z,2021-06-30T00:00:00.000Z,311105.72231182834,93
+2021-07-01T00:00:00.000Z,2021-07-31T00:00:00.000Z,300329.87567741884,93
+2021-08-01T00:00:00.000Z,2021-08-31T00:00:00.000Z,300353.6891397853,93
+2021-09-01T00:00:00.000Z,2021-09-30T00:00:00.000Z,297747.5853440855,93
+```
+
+## Future Goals
+- Create a single interaction CLI or microservice for interacting with all the current scripts, effectively turning them into interactive functionalities
+- Create a web-based GUI
