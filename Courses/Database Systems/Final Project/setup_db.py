@@ -51,16 +51,12 @@ if __name__ == "__main__":
 
     # Generate data points for all dates
     data_points_df = pd.DataFrame(columns=["region_id", "date", "point_id"])
-    for idx, row in production_df[["region_id", "start_date"]].iterrows():
+    for idx, row in production_df[["region_id", "start_date", "end_date"]].iterrows():
+        m_days = (row["end_date"] - row["start_date"]).days + 1
         monthly_rows = {
-            "region_id": [
-                row["region_id"] for _ in range(row.start_date.days_in_month)
-            ],
-            "point_id": [idx for _ in range(row.start_date.days_in_month)],
-            "date": [
-                row["start_date"] + timedelta(days=i)
-                for i in range(row.start_date.days_in_month)
-            ],
+            "region_id": [row["region_id"] for _ in range(m_days)],
+            "point_id": [idx for _ in range(m_days)],
+            "date": [row["start_date"] + timedelta(days=i) for i in range(m_days)],
         }
         monthly_rows = pd.DataFrame(monthly_rows)
         data_points_df = pd.concat([data_points_df, monthly_rows], ignore_index=True)
