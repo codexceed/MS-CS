@@ -20,6 +20,7 @@ from the fruits after they have been harvested.
 python setup_db.py
 ```
 This sets up the initial state of the DB with some default data for grople syrup production.
+> **Note**: Setup requires row insertions which need to be checked against table integrity constraints. Due to this, the setup can take a few minutes to finish. You will see the insertion logs output on the console.
 ### Execute queries on the Grople DB
 Use the `execute_query.py` script to perform SQL queries on Grople DB like as follows
 ```shell
@@ -98,11 +99,11 @@ start_date,end_date,prod,region_id
 2021-09-01T00:00:00.000Z,2021-09-30T00:00:00.000Z,297747.5853440855,93
 ```
 
-## Future Goals
-- Create a single interaction CLI or microservice for interacting with all the current scripts, effectively turning them into interactive functionalities
-- Create a web-based GUI
-
 ## Modeling
 There are two notebooks in the `ml` directory,
 - **Grople Syrup DB to ML.ipynb**: Contains the initial modeling process metrics and figures which were done using csv files as input. 
 - **Grople Syrup DB to ML - SQL Joins.ipynb**: Contains the refined training and inference code using data directly sourced from SQLite tables.
+
+## Future Goals
+- Create a single interaction CLI or microservice for interacting with all the current scripts, effectively turning them into interactive functionalities
+- Create a web-based GUI
