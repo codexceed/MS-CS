@@ -64,6 +64,7 @@ MSE: 135.66202606659385
 ```
 - The latest model is automatically persists in the `models` directory with a timestamp in its name.
 - All the data in the grople database is used for the modeling process, and it's 10% of the data is reserved for evaluation.
+> **Note**: The training is done on an ExtraTreesRegressor model which take less than 10 mins to complete.
 ### Predicting grople syrup production
 ```shell
 $ python execute_inference.py
