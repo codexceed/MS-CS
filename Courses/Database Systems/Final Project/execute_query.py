@@ -73,8 +73,8 @@ if __name__ == "__main__":
             query_args[col] = (
                 input(f"{col}(dd/mm/yyy HH:MM:SS)=")
                 if valid_column_types[col] == DateTime
-                else input(f"{col}=") or None
-            )
+                else input(f"{col}=")
+            ) or None
     else:
         filter_str = input(
             f"Please specify row filter in the format: 'column1=value1 column2=value2'. Dates should be formatted "
@@ -92,13 +92,17 @@ if __name__ == "__main__":
     # Preprocess values
     for col, val in query_args.items():
         if valid_column_types[col] == Integer:
-            query_args[col] = int(query_args[col])
+            query_args[col] = None if query_args[col] is None else int(query_args[col])
         elif valid_column_types[col] == Float:
-            query_args[col] = float(query_args[col])
+            query_args[col] = (
+                None if query_args[col] is None else float(query_args[col])
+            )
         elif valid_column_types[col] == DateTime:
             try:
-                query_args[col] = datetime.strptime(
-                    query_args[col], "%d/%m/%Y %H:%M:%S"
+                query_args[col] = (
+                    None
+                    if query_args[col] is None
+                    else datetime.strptime(query_args[col], "%d/%m/%Y %H:%M:%S")
                 )
             except ValueError:
                 query_args[col] = datetime.strptime(query_args[col], "%d/%m/%Y")
