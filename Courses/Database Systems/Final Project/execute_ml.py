@@ -91,7 +91,7 @@ ex_tree = ExtraTreesRegressor(criterion="absolute_error")
 ex_tree.fit(X_train, y_train)
 
 model_name = f"grople_model_{datetime.utcnow().timestamp()}.gz"
-print(f"Persisting trained model named {model_name} to {MODEL_PATH}")
+print(f"Persisting trained model named {model_name} to {MODEL_PATH} directory")
 MODEL_PATH.mkdir(exist_ok=True)
 dump(ex_tree, f"{MODEL_PATH}/{model_name}")
 print(f"Score: {ex_tree.score(X_test, y_test)}")

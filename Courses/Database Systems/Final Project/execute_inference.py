@@ -100,7 +100,6 @@ joint_df = joint_df.sort_values(["region_id", "start_date"])
 joint_df = joint_df[joint_df["smos"].notna()]
 joint_df.fillna(method="ffill", inplace=True)
 joint_df.fillna(method="bfill", inplace=True)
-joint_df.info()
 
 cols = list(ndvi.columns) + ["curr_date"]
 merge_ndvi = pd.DataFrame(columns=cols)
