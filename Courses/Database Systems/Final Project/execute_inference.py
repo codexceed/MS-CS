@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 from datetime import timedelta
 from pathlib import Path
-from joblib import load
 
 import pandas as pd
+from joblib import load
 
 from constants.env import MODEL_PATH
 from utils.data import preprocess_grople_inp
@@ -41,7 +41,9 @@ production_inp = (
 
 output_path = None
 while output_path is None:
-    output_path = Path(input("Please enter a valid csv prediction output file path:") or None)
+    output_path = Path(
+        input("Please enter a valid csv prediction output file path:") or None
+    )
 
 # Load data
 pred_production = pd.read_csv(data_path / production_inp)
