@@ -101,3 +101,8 @@ start_date,end_date,prod,region_id
 ## Future Goals
 - Create a single interaction CLI or microservice for interacting with all the current scripts, effectively turning them into interactive functionalities
 - Create a web-based GUI
+
+## Modeling
+There are two notebooks in the `ml` directory,
+- **Grople Syrup DB to ML.ipynb**: Contains the initial modeling process metrics and figures which were done using csv files as input. 
+- **Grople Syrup DB to ML - SQL Joins.ipynb**: Contains the refined training and inference code using data directly sourced from SQLite tables.
