@@ -5,10 +5,13 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
+    create_engine,
     event,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base
+
+from constants.env import DB_PATH
 
 Base = declarative_base()
 
@@ -20,6 +23,12 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.close()
 
 
+def default_point():
+    engine = create_engine(f"sqlite:///{DB_PATH}")
+    with engine.connect() as con:
+        return con.execute("select max(point_id) from production;").all()[0][0] + 1
+
+
 class Production(Base):
     __tablename__ = "production"
 
@@ -27,7 +36,7 @@ class Production(Base):
     start_date = Column(DateTime, primary_key=True)
     end_date = Column(DateTime)
     prod = Column(Integer)
-    point_id = Column(Integer, unique=True, nullable=False, autoincrement=True)
+    point_id = Column(Integer, default=default_point, unique=True, nullable=False)
 
 
 class DataPoints(Base):

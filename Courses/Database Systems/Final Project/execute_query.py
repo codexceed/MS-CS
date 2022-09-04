@@ -73,7 +73,7 @@ if __name__ == "__main__":
             query_args[col] = (
                 input(f"{col}(dd/mm/yyy HH:MM:SS)=")
                 if valid_column_types[col] == DateTime
-                else input(f"{col}=")
+                else input(f"{col}=") or None
             )
     else:
         filter_str = input(
