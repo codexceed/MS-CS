@@ -30,6 +30,7 @@ def safe_insert(df, schema_class, Session):
 
 
 if __name__ == "__main__":
+    DB_PATH.parent.mkdir(exist_ok=True)
     engine = create_engine(f"sqlite:///{DB_PATH}", echo=True)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
