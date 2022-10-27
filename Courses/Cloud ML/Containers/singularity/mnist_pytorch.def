@@ -1,0 +1,30 @@
+Bootstrap: docker
+From: intel/intel-optimized-pytorch
+
+
+%post
+    cd /mnist
+    python --version
+    pip --version
+    pip3 install -r /mnist/requirements.txt
+
+%files
+    mnist_pytorch.py /mnist/mnist_pytorch.py
+    requirements.txt /mnist/requirements.txt
+
+%test
+    python3 --version
+    pip3 --version
+    pip3 show torch
+    pip3 show matplotlib
+
+%runscript
+    python3 mnist_pytorch.py
+
+%labels
+    Author codexceed@github.com
+    Version v0.0.1
+
+%help
+    This is a demo container used to illustrate a def file that uses all
+    supported sections.
