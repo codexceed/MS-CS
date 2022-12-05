@@ -9,12 +9,14 @@ from torchvision import datasets, transforms
 
 from .utils import Net, train, validate
 
+
 MODEL_FILE = "mnist_cnn.pt"
 
 
 def _get_device():
     use_cuda = os.getenv("CUDA") == "True"
-    if use_cuda:
+    
+    if use_cuda and torch.cuda.is_available():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
