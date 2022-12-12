@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-ml
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      scope: academics
+  template:
+    metadata:
+      labels:
+        scope: academics
+    spec:
+      containers:
+      - name: mnist-app
+        image: codexceed/mnist_app:1.0.1
+        imagePullPolicy: IfNotPresent
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mnist-endpoint
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector:
+    scope: academics
+  ports:
+  - port: 5000
+    targetPort: 5000

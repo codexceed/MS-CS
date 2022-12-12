@@ -1,0 +1,5 @@
+flask~=2.2.2
+flask-request-validator
+gunicorn
+torch
+torchvision
